@@ -1,0 +1,50 @@
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+WORKDIR /var/www/app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        default-libmysqlclient-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install \
+        beautifulsoup4==4.13.4 \
+        httpx \
+        mysql-connector-python \
+        playwright==1.54.0 \
+        playwright-stealth==2.0.0 \
+        pydantic \
+        python-dotenv==1.1.0 \
+        requests
+
+RUN python -m playwright install --with-deps chromium \
+    && python - <<'PY'
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto("data:text/html,<title>ok</title><h1>ok</h1>")
+    assert page.title() == "ok"
+    browser.close()
+PY
+
+COPY . /tmp/common
+RUN python -m pip install /tmp/common \
+    && install -m 0755 /tmp/common/scripts/run_job_common.sh /usr/local/bin/run_job_common.sh \
+    && install -m 0755 /tmp/common/bin/metering_cli.py /usr/local/bin/metering_cli.py \
+    && rm -rf /tmp/common
+
+RUN mkdir -p /var/www/app/logs /var/www/app/artifacts
+
+CMD ["python", "--version"]
