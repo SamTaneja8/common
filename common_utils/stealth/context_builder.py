@@ -6,7 +6,11 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any
 
-from common_utils.stealth.resource_blocking import ResourceBlockPolicy
+from common_utils.stealth.resource_blocking import (
+    ResourceBlockPolicy,
+    handle_async_route_with_policy,
+    handle_sync_route_with_policy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +108,10 @@ class ContextBuilder:
 
     async def new_async_page(self, context):
         page = await context.new_page()
-        await page.route("**/*", self.resource_policy.handle_async_route)
+        async def _route_handler(route):
+            await handle_async_route_with_policy(route, self.resource_policy)
+
+        await page.route("**/*", _route_handler)
         if self.apply_playwright_stealth:
             try:
                 from playwright_stealth import Stealth
@@ -137,7 +144,10 @@ class ContextBuilder:
 
     def new_sync_page(self, context):
         page = context.new_page()
-        page.route("**/*", self.resource_policy.handle_sync_route)
+        def _route_handler(route):
+            handle_sync_route_with_policy(route, self.resource_policy)
+
+        page.route("**/*", _route_handler)
         if self.apply_playwright_stealth:
             try:
                 from playwright_stealth import stealth_sync

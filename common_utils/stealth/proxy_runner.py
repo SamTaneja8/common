@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Any
+import logging
 
 from common_utils.playwright_exceptions import PlaywrightExceptionContext, resolve_scheduled_slot
 from common_utils.proxy_settings import build_proxy_configs
@@ -11,6 +12,8 @@ from common_utils.stealth.bot_detection import detect_bot_challenge
 from common_utils.stealth.context_builder import ContextBuilder
 from common_utils.stealth.exceptions import BotBlockedError
 from common_utils.stealth.navigation import scroll_and_wait, warm_session
+
+logger = logging.getLogger("common_utils.stealth.proxy_runner")
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,19 +105,53 @@ class StealthProxyRunner:
         selector: str | None,
         metadata: dict[str, Any],
     ) -> StealthFetchResult:
-        browser = await playwright.chromium.launch(**self.context_builder.launch_kwargs(proxy=playwright_proxy, headless=self.headless))
-        context = await self.context_builder.new_async_context(browser)
-        page = await self.context_builder.new_async_page(context)
-        event_buffer = self.exception_pipeline.new_event_buffer() if self.exception_pipeline else None
-        if event_buffer:
-            event_buffer.attach_async_page(page)
+        stage = "launch"
+        browser = None
+        context = None
+        page = None
+        event_buffer = None
+        logger.info(
+            "Stealth fetch starting provider=%s step=%s proxy_enabled=%s url=%s",
+            provider_name,
+            step_name,
+            bool(playwright_proxy),
+            url,
+        )
         try:
+            logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
+            browser = await playwright.chromium.launch(**self.context_builder.launch_kwargs(proxy=playwright_proxy, headless=self.headless))
+            stage = "new_context"
+            logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
+            context = await self.context_builder.new_async_context(browser)
+            stage = "new_page"
+            logger.info(
+                "Stealth fetch provider=%s stage=%s apply_playwright_stealth=%s",
+                provider_name,
+                stage,
+                self.context_builder.apply_playwright_stealth,
+            )
+            page = await self.context_builder.new_async_page(context)
+            event_buffer = self.exception_pipeline.new_event_buffer() if self.exception_pipeline else None
+            if event_buffer:
+                stage = "attach_event_buffer"
+                logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
+                event_buffer.attach_async_page(page)
+            stage = "warm_session"
+            logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
             await warm_session(page, warmup_urls, timeout_ms=timeout_ms)
+            stage = "goto"
+            logger.info("Stealth fetch provider=%s stage=%s wait_until=%s timeout_ms=%s", provider_name, stage, wait_until, timeout_ms)
             response = await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
             if selector:
+                stage = "wait_for_selector"
+                logger.info("Stealth fetch provider=%s stage=%s selector=%s", provider_name, stage, selector)
                 await page.wait_for_selector(selector, timeout=timeout_ms)
             if scroll:
+                stage = "scroll"
+                logger.info("Stealth fetch provider=%s stage=%s min_scrolls=%s max_scrolls=%s", provider_name, stage, min_scrolls, max_scrolls)
                 await scroll_and_wait(page, min_scrolls=min_scrolls, max_scrolls=max_scrolls)
+            stage = "content"
+            logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
             html = await page.content()
             try:
                 body_text = await page.locator("body").inner_text(timeout=5000)
@@ -133,6 +170,7 @@ class StealthProxyRunner:
                 proxy_provider=provider_name,
             )
         except Exception as exc:
+            logger.exception("Stealth fetch provider=%s failed at stage=%s", provider_name, stage)
             if self.exception_pipeline:
                 await self.exception_pipeline.capture_async_exception(
                     context=PlaywrightExceptionContext(
@@ -156,5 +194,7 @@ class StealthProxyRunner:
                 )
             raise
         finally:
-            await context.close()
-            await browser.close()
+            if context is not None:
+                await context.close()
+            if browser is not None:
+                await browser.close()

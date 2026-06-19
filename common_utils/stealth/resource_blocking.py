@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 DEFAULT_BLOCKED_RESOURCE_TYPES = {"image", "media", "font"}
@@ -47,3 +48,19 @@ class ResourceBlockPolicy:
             route.abort()
         else:
             route.continue_()
+
+
+async def handle_async_route_with_policy(route: Any, policy: ResourceBlockPolicy) -> None:
+    request = route.request
+    if policy.should_block(getattr(request, "resource_type", None), getattr(request, "url", None)):
+        await route.abort()
+    else:
+        await route.continue_()
+
+
+def handle_sync_route_with_policy(route: Any, policy: ResourceBlockPolicy) -> None:
+    request = route.request
+    if policy.should_block(getattr(request, "resource_type", None), getattr(request, "url", None)):
+        route.abort()
+    else:
+        route.continue_()
