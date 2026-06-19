@@ -158,9 +158,23 @@ class StealthProxyRunner:
             except Exception:
                 body_text = ""
             page_title = await page.title()
+            selector_confirmed = False
+            if selector:
+                try:
+                    selector_confirmed = await page.locator(selector).count() > 0
+                except Exception:
+                    selector_confirmed = False
             bot_marker = detect_bot_challenge(page_title=page_title, body_text=body_text, html=html)
             if bot_marker:
-                raise BotBlockedError(f"Bot challenge detected: {bot_marker}")
+                if selector_confirmed:
+                    logger.warning(
+                        "Stealth fetch provider=%s detected soft bot marker=%s but selector=%s is present; treating page as usable",
+                        provider_name,
+                        bot_marker,
+                        selector,
+                    )
+                else:
+                    raise BotBlockedError(f"Bot challenge detected: {bot_marker}")
             record_proxy_success(provider_name, step_name)
             return StealthFetchResult(
                 html=html,
