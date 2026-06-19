@@ -170,5 +170,39 @@ PROVIDER_BUILDERS = {
 def build_proxy_config_for_provider(provider_name: str) -> dict | None:
     builder = PROVIDER_BUILDERS.get(provider_name.strip().upper())
     if builder is None:
-        return None
+        supported = ", ".join(sorted(PROVIDER_BUILDERS))
+        raise ValueError(f"Unknown proxy provider '{provider_name}'. Supported providers: {supported}")
     return builder()
+
+
+def get_proxy_order() -> list[str]:
+    raw = _get_str("PROXY", "DIRECT")
+    order = [
+        normalized
+        for normalized in ("".join(character for character in part.strip().upper() if character.isalnum()) for part in raw.split(","))
+        if normalized
+    ]
+    return order or ["DIRECT"]
+
+
+def build_proxy_configs(settings: SharedProxySettings | None = None) -> list[dict]:
+    settings = settings or load_shared_proxy_settings()
+    configs: list[dict] = []
+    for provider_name in get_proxy_order():
+        if provider_name == "DIRECT":
+            configs.append(build_direct_config())
+            continue
+        config = build_proxy_config_for_provider(provider_name)
+        if config is None:
+            continue
+        if provider_name == "EVOMI":
+            config = build_evomi_config(settings)
+        elif provider_name == "BRIGHTDATA":
+            config = build_brightdata_config(settings)
+        elif provider_name == "DECODO":
+            config = build_decodo_config(settings)
+        elif provider_name == "FLOPPYDATA":
+            config = build_floppydata_config(settings)
+        if config is not None:
+            configs.append(config)
+    return configs
