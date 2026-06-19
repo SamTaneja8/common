@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import random
 from dataclasses import dataclass, field
 import logging
@@ -8,6 +9,13 @@ from typing import Any
 from common_utils.stealth.resource_blocking import ResourceBlockPolicy
 
 logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
 
 
 DESKTOP_USER_AGENTS = (
@@ -52,11 +60,15 @@ class ContextBuilder:
         *,
         profile: BrowserProfile | None = None,
         resource_policy: ResourceBlockPolicy | None = None,
-        apply_playwright_stealth: bool = True,
+        apply_playwright_stealth: bool | None = None,
     ) -> None:
         self.profile = profile or BrowserProfile()
         self.resource_policy = resource_policy or ResourceBlockPolicy()
-        self.apply_playwright_stealth = apply_playwright_stealth
+        self.apply_playwright_stealth = (
+            _env_bool("ENABLE_PLAYWRIGHT_STEALTH", False)
+            if apply_playwright_stealth is None
+            else apply_playwright_stealth
+        )
 
     def launch_kwargs(self, *, proxy: dict[str, str] | None = None, headless: bool = True) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
