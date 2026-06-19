@@ -45,6 +45,10 @@ RUN python -m pip install /tmp/common \
     && install -m 0755 /tmp/common/bin/metering_cli.py /usr/local/bin/metering_cli.py \
     && rm -rf /tmp/common
 
+# Also copy the shared source tree directly so scraper repos always get the
+# full module set even if wheel packaging lags behind new subpackages.
+COPY common_utils /usr/local/lib/python3.11/site-packages/common_utils
+
 RUN mkdir -p /var/www/app/logs /var/www/app/artifacts
 
 CMD ["python", "--version"]
