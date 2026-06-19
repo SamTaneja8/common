@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+import logging
 from typing import Any
 
 from common_utils.stealth.resource_blocking import ResourceBlockPolicy
+
+logger = logging.getLogger(__name__)
 
 
 DESKTOP_USER_AGENTS = (
@@ -100,6 +103,9 @@ class ContextBuilder:
                     await apply_page(page)
             except ImportError:
                 pass
+            except Exception as exc:
+                logger.warning("playwright_stealth async application failed; continuing with init-script stealth only: %s", exc)
+                pass
         return page
 
     def new_sync_context(self, browser):
@@ -126,5 +132,8 @@ class ContextBuilder:
 
                 stealth_sync(page)
             except ImportError:
+                pass
+            except Exception as exc:
+                logger.warning("playwright_stealth sync application failed; continuing with init-script stealth only: %s", exc)
                 pass
         return page
