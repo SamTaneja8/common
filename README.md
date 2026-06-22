@@ -21,7 +21,13 @@ For now, this repo provides:
 
 ## Shared Scraper Base Image
 
-Build the shared scraper base image with:
+`common` owns the shared scraper base image. The image includes Python 3.11,
+Playwright Chromium, shared scraper libraries, and the installed `common-utils`
+package so child scraper images can inherit one reusable runtime layer.
+
+### Local Build
+
+Build a local copy of the shared scraper base image with:
 
 ```bash
 ./scripts/build_scraper_base.sh
@@ -45,6 +51,31 @@ SCRAPER_BASE_IMAGE=local/scraper-base:py311-playwright-20260619-174500
 ```
 
 in that repo's `.env`.
+
+### GitHub Container Registry
+
+Pushing a semantic version tag from this repo publishes the shared base image to
+GitHub Container Registry:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The workflow publishes:
+
+- `ghcr.io/<github-owner-lowercase>/scraper-base:1.1.0`
+- `ghcr.io/<github-owner-lowercase>/scraper-base:1.1`
+- `ghcr.io/<github-owner-lowercase>/scraper-base:1`
+
+For this account, consumers should pin the exact version:
+
+```env
+SCRAPER_BASE_IMAGE=ghcr.io/samtaneja8/scraper-base:1.1.0
+```
+
+The workflow lowercases the GitHub owner before building the image name because
+Docker image references must be lowercase.
 
 ### Automatic Cleanup
 

@@ -10,14 +10,11 @@ WORKDIR /var/www/app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        build-essential \
         curl \
-        default-libmysqlclient-dev \
-        pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --upgrade pip setuptools wheel \
-    && python -m pip install \
+    && python -m pip install --no-cache-dir \
         beautifulsoup4==4.13.4 \
         httpx \
         mysql-connector-python \
@@ -28,19 +25,11 @@ RUN python -m pip install --upgrade pip setuptools wheel \
         requests
 
 RUN python -m playwright install --with-deps chromium \
-    && python - <<'PY'
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
-    page.goto("data:text/html,<title>ok</title><h1>ok</h1>")
-    assert page.title() == "ok"
-    browser.close()
-PY
+    && python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(headless=True); page = browser.new_page(); page.goto('data:text/html,<title>ok</title><h1>ok</h1>'); assert page.title() == 'ok'; browser.close(); p.stop()" \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . /tmp/common
-RUN python -m pip install /tmp/common \
+RUN python -m pip install --no-cache-dir /tmp/common \
     && install -m 0755 /tmp/common/scripts/run_job_common.sh /usr/local/bin/run_job_common.sh \
     && install -m 0755 /tmp/common/bin/metering_cli.py /usr/local/bin/metering_cli.py \
     && rm -rf /tmp/common

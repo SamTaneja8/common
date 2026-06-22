@@ -15,6 +15,7 @@ Create:
 - `common_utils/metering.py`: env-driven job metering helpers for `job_run_metering`.
 - `common_utils/metering_cli.py`: CLI entry point for shell wrappers.
 - `Dockerfile.scraper-base`: Python 3.11 slim Bookworm scraper base image with Playwright Chromium.
+- `.github/workflows/publish-scraper-base.yml`: GitHub Actions workflow that publishes the scraper base image to GHCR on semantic version tags.
 - `scripts/build_scraper_base.sh`: local base image build script.
 - `scripts/run_job_common.sh`: generic command wrapper that records shell metering events.
 - `bin/metering_cli.py`: executable wrapper installed into the base image path.
@@ -73,7 +74,7 @@ Create a base image tagged locally as `local/scraper-base:py311-playwright` by d
 The image must:
 
 - Use the Bookworm-based `python:3.11-slim` variant.
-- Install `build-essential`, `curl`, `default-libmysqlclient-dev`, and `pkg-config`.
+- Install `curl`.
 - Set `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
 - Install common Python packages: `mysql-connector-python`, `requests`, `httpx`, `beautifulsoup4`, `playwright`, `playwright-stealth`, `python-dotenv`, and `pydantic`.
 - Run `python -m playwright install --with-deps chromium`.
@@ -83,6 +84,22 @@ The image must:
 - Create `/var/www/app`, `/var/www/app/logs`, and `/var/www/app/artifacts`.
 
 Do not bake credentials into the image.
+
+## Base Image Publishing
+
+Add a GitHub Actions workflow at `.github/workflows/publish-scraper-base.yml`.
+
+The workflow must:
+
+- trigger on tags matching `v*.*.*`
+- build `Dockerfile.scraper-base` from the repo root context
+- publish to `ghcr.io/<lowercase-github-owner>/scraper-base`
+- produce semver tags like `1.1.0`, `1.1`, and `1`
+- use `docker/setup-buildx-action`, `docker/login-action`, `docker/metadata-action`, and `docker/build-push-action`
+- use the GitHub Actions cache for Docker layers
+
+The workflow should lowercase `GITHUB_REPOSITORY_OWNER` before composing the
+GHCR image name because Docker image references must be lowercase.
 
 ## Shared Runtime Helpers
 
