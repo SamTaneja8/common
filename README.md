@@ -99,6 +99,20 @@ To preview cleanup without deleting anything:
 ## Notes
 
 - Put real proxy credentials in `common_utils/.env` on the machine that runs the jobs.
-- `PROXY` and `LOG_SAVE_DAYS` should remain in each application repo's own `.env`
+- `PROXY` should remain in each application repo's own `.env`
+- `LOG_SAVE_DAYS` can live in an app repo `.env`; if missing there, wrappers use `common/.env`
 - provider credentials like `EVOMI_*` and `FLOPPYDATA_*` are intended to live here
 - set `SHARED_PROXY_ENV_FILE` if the shared proxy env file lives somewhere other than `common_utils/.env`
+
+## VPS Logging and Cron
+
+`common` also owns the shared VPS observability setup that replaces the old
+`vpsmonitor` logging role:
+
+- [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy) tails app-owned log files and sends them to Grafana Cloud Loki.
+- [scripts/run_cron_job.sh](/Users/samtaneja/Codex/common/scripts/run_cron_job.sh) is the simple shared cron wrapper for running one repo-owned job now.
+- [docs/grafana-cloud-logging.md](/Users/samtaneja/Codex/common/docs/grafana-cloud-logging.md) documents the VPS install and cron examples.
+
+The shared cron wrapper itself does not build images, clean Docker images,
+mutate MySQL, or replay missed jobs. Those operations stay repo-owned or
+manual, depending on the app script cron invokes.

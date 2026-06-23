@@ -1,0 +1,68 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.source.file "scraper_logs" {
+  targets = [
+    {
+      __path__ = "/home/botuser/dealnews1/logs/container_runs/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      repo     = "dealnews1",
+      stream   = "container",
+    },
+    {
+      __path__ = "/home/botuser/dealnews1/logs/cron_runs/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      repo     = "dealnews1",
+      stream   = "cron",
+    },
+    {
+      __path__ = "/home/botuser/dealmoon1/logs/container_runs/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      repo     = "dealmoon1",
+      stream   = "container",
+    },
+    {
+      __path__ = "/home/botuser/dealmoon1/logs/cron_runs/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      repo     = "dealmoon1",
+      stream   = "cron",
+    },
+  ]
+
+  forward_to = [loki.write.grafana_cloud.receiver]
+
+  file_match {
+    enabled     = true
+    sync_period = "10s"
+  }
+}
+
+loki.source.file "docker_json_logs" {
+  targets = [
+    {
+      __path__ = "/var/lib/docker/containers/*/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      stream   = "docker-json",
+    },
+  ]
+
+  forward_to = [loki.write.grafana_cloud.receiver]
+
+  file_match {
+    enabled     = true
+    sync_period = "30s"
+  }
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_LOKI_USERNAME")
+      password = sys.env("GRAFANA_CLOUD_LOKI_TOKEN")
+    }
+  }
+}

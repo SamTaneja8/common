@@ -9,6 +9,7 @@ Use this file as a quick map when you need to find the right operational helper,
 Purpose: start, stop, or invoke the repo runtime and its recurring operational entrypoints.
 
 - `run_job_common.sh`: Shared helper that standardizes how scheduled jobs are launched for scraper-style repos.
+- `run_cron_job.sh`: Simple VPS cron wrapper that runs one repo-owned command now, writes a durable cron log, prunes old cron logs using `LOG_SAVE_DAYS`, and avoids missed-job replay logic.
 
 ## Build and image management
 
