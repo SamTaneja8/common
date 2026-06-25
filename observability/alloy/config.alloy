@@ -3,6 +3,59 @@ logging {
   format = "logfmt"
 }
 
+prometheus.remote_write "grafana_cloud" {
+  external_labels = {
+    host        = sys.env("COMMON_HOST_LABEL"),
+    source_repo = "common",
+  }
+
+  endpoint {
+    url = sys.env("GCLOUD_HOSTED_METRICS_URL")
+
+    basic_auth {
+      username = sys.env("GCLOUD_HOSTED_METRICS_ID")
+      password = sys.env("GCLOUD_RW_API_KEY")
+    }
+  }
+}
+
+prometheus.exporter.unix "host" {
+  include_exporter_metrics = false
+  disable_collectors       = ["ipvs"]
+}
+
+prometheus.scrape "host" {
+  job_name        = "node"
+  targets         = prometheus.exporter.unix.host.targets
+  scrape_interval = sys.env("GCLOUD_SCRAPE_INTERVAL")
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.exporter.cadvisor "docker" {
+  docker_host = "unix:///var/run/docker.sock"
+
+  allowlisted_container_labels = [
+    "com.docker.compose.project",
+    "com.docker.compose.service",
+  ]
+}
+
+prometheus.scrape "docker" {
+  job_name        = "cadvisor"
+  targets         = prometheus.exporter.cadvisor.docker.targets
+  scrape_interval = sys.env("GCLOUD_SCRAPE_INTERVAL")
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy" {
+  job_name        = "alloy"
+  targets         = prometheus.exporter.self.alloy.targets
+  scrape_interval = sys.env("GCLOUD_SCRAPE_INTERVAL")
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
 loki.source.file "scraper_logs" {
   targets = [
     {
@@ -56,13 +109,30 @@ loki.source.file "docker_json_logs" {
   }
 }
 
+loki.source.file "system_logs" {
+  targets = [
+    {
+      __path__ = "/var/log/{syslog,messages,*.log}",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      stream   = "system",
+    },
+  ]
+
+  forward_to = [loki.write.grafana_cloud.receiver]
+
+  file_match {
+    enabled     = true
+    sync_period = "30s"
+  }
+}
+
 loki.write "grafana_cloud" {
   endpoint {
-    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+    url = sys.env("GCLOUD_HOSTED_LOGS_URL")
 
     basic_auth {
-      username = sys.env("GRAFANA_CLOUD_LOKI_USERNAME")
-      password = sys.env("GRAFANA_CLOUD_LOKI_TOKEN")
+      username = sys.env("GCLOUD_HOSTED_LOGS_ID")
+      password = sys.env("GCLOUD_RW_API_KEY")
     }
   }
 }

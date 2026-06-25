@@ -1,6 +1,7 @@
-# Grafana Cloud VPS Logging
+# Grafana Cloud VPS Observability
 
-This repo owns the shared Grafana Cloud and Alloy setup for VPS log shipping.
+This repo owns the shared Grafana Cloud and Alloy setup for VPS log and metric
+shipping.
 Application repos still own their job scripts, Docker builds, Docker cleanup,
 database setup, and `LOG_SAVE_DAYS` log retention.
 
@@ -9,6 +10,9 @@ database setup, and `LOG_SAVE_DAYS` log retention.
 Grafana Cloud replaces the visibility parts of the old `vpsmonitor` flow:
 
 - centralized log search through Loki
+- host CPU, memory, disk, filesystem, load, and network metrics
+- Docker container metrics through cAdvisor
+- Alloy self metrics
 - dashboards built from logs and metrics
 - alert rules and notifications
 - optional external uptime checks through Synthetic Monitoring
@@ -24,6 +28,7 @@ The scraper repos write durable logs under their own repo folders:
 - `/home/botuser/dealnews1/logs/cron_runs/*.log`
 - `/home/botuser/dealmoon1/logs/container_runs/*.log`
 - `/home/botuser/dealmoon1/logs/cron_runs/*.log`
+- `/var/log/{syslog,messages,*.log}`
 
 Always-on infrastructure containers, such as MySQL, Caddy, Headscale, n8n, and
 networking services, are not cleaned up by scraper jobs. Alloy can also tail
@@ -46,50 +51,75 @@ resolved in this order:
 Docker-managed JSON logs should be controlled with Docker log rotation settings
 on the VPS, not by scraper cleanup scripts.
 
+## Metric Flow
+
+The shared Alloy config also forwards VPS metrics to Grafana Cloud Metrics:
+
+- `prometheus.exporter.unix` for host metrics
+- `prometheus.exporter.cadvisor` for Docker/container metrics
+- `prometheus.exporter.self` for Alloy health
+
+The same config works on VPS1 and VPS2. Set a different `COMMON_HOST_LABEL` on
+each VPS so dashboards and alerts can filter by host.
+
 ## Install Alloy On A VPS
 
-Install Grafana Alloy from the official apt repository:
+Grafana Cloud's onboarding script is useful for installing Alloy and proving
+that the credentials work. Do not commit the generated `/etc/alloy/config.alloy`
+because it hardcodes the API key.
 
-```bash
-sudo apt-get update
-sudo apt-get install -y gpg wget
-sudo mkdir -p /etc/apt/keyrings
-sudo wget -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg-full.key
-sudo chmod 644 /etc/apt/keyrings/grafana.asc
-echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
-sudo apt-get update
-sudo apt-get install -y alloy
-```
-
-Copy the shared config:
-
-```bash
-sudo mkdir -p /etc/alloy
-sudo cp /home/botuser/common/observability/alloy/config.alloy /etc/alloy/config.alloy
-```
-
-Set credentials in `/etc/default/alloy`:
+Use the values Grafana Cloud provided, but rotate the API key first if it has
+been pasted into chat or committed anywhere. Put the values in
+`/home/botuser/common/.env` on each VPS:
 
 ```bash
 COMMON_HOST_LABEL="vps1"
-GRAFANA_CLOUD_LOKI_URL="https://logs-prod-000.grafana.net/loki/api/v1/push"
-GRAFANA_CLOUD_LOKI_USERNAME="your-loki-username"
-GRAFANA_CLOUD_LOKI_TOKEN="your-cloud-access-policy-token"
+
+GCLOUD_HOSTED_METRICS_URL="https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push"
+GCLOUD_HOSTED_METRICS_ID="3327852"
+GCLOUD_SCRAPE_INTERVAL="60s"
+
+GCLOUD_HOSTED_LOGS_URL="https://logs-prod-042.grafana.net/loki/api/v1/push"
+GCLOUD_HOSTED_LOGS_ID="1659601"
+GCLOUD_RW_API_KEY="your-rotated-grafana-cloud-api-key"
 ```
 
-Use `COMMON_HOST_LABEL="vps2"` on VPS2.
+Use `COMMON_HOST_LABEL="vps2"` on VPS2. Keep the Grafana credentials from that
+same Grafana Cloud stack unless you intentionally split VPS1 and VPS2 into
+different stacks.
 
-Start Alloy:
+Then run the shared setup script:
 
 ```bash
-sudo systemctl enable alloy
-sudo systemctl restart alloy
-sudo systemctl status alloy
+cd /home/botuser/common
+./scripts/setup_grafana_alloy.sh --install-alloy --host-label vps1
+```
+
+On VPS2, use `--host-label vps2`.
+
+The script:
+
+- optionally runs Grafana Cloud's Linux binary installer
+- copies [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy) to `/etc/alloy/config.alloy`
+- writes the `GCLOUD_*` values to `/etc/default/alloy`
+- enables and restarts the Alloy service when `systemctl` is available
+
+Preview without changing the VPS:
+
+```bash
+./scripts/setup_grafana_alloy.sh --host-label vps1 --dry-run
 ```
 
 If Alloy cannot read `/var/lib/docker/containers/*/*.log`, either run the Alloy
 service with sufficient permissions or remove the `docker_json_logs` source and
 rely only on app-owned log files.
+
+If Alloy cannot scrape Docker/container metrics, add the `alloy` service user to
+the Docker group or run Alloy with sufficient access to `/var/run/docker.sock`.
+
+Detailed MySQL internals are not enabled in the shared config yet. MySQL will
+still appear as a Docker container with logs and container metrics. Add a MySQL
+exporter later if you want query/cache/connection metrics inside Grafana.
 
 ## Cron Wrapper
 

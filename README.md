@@ -104,13 +104,14 @@ To preview cleanup without deleting anything:
 - provider credentials like `EVOMI_*` and `FLOPPYDATA_*` are intended to live here
 - set `SHARED_PROXY_ENV_FILE` if the shared proxy env file lives somewhere other than `common_utils/.env`
 
-## VPS Logging and Cron
+## VPS Observability and Cron
 
 `common` also owns the shared VPS observability setup that replaces the old
-`vpsmonitor` logging role:
+`vpsmonitor` logging and host-monitoring role:
 
-- [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy) tails app-owned log files and sends them to Grafana Cloud Loki.
+- [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy) tails app-owned log files, Docker JSON logs, host metrics, Docker container metrics, and Alloy self metrics into Grafana Cloud.
 - [scripts/run_cron_job.sh](/Users/samtaneja/Codex/common/scripts/run_cron_job.sh) is the simple shared cron wrapper for running one repo-owned job now.
+- [scripts/setup_grafana_alloy.sh](/Users/samtaneja/Codex/common/scripts/setup_grafana_alloy.sh) installs the Grafana-provided Alloy plumbing on VPS1/VPS2 using values from `common/.env`.
 - [docs/grafana-cloud-logging.md](/Users/samtaneja/Codex/common/docs/grafana-cloud-logging.md) documents the VPS install and cron examples.
 
 The shared cron wrapper itself does not build images, clean Docker images,
