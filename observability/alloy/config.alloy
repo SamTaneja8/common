@@ -88,7 +88,7 @@ loki.process "add_repo_label" {
 
   stage.labels {
     values = {
-      repo = "",
+      repo = "repo",
     }
   }
 }
