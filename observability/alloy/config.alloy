@@ -59,36 +59,37 @@ prometheus.scrape "alloy" {
 loki.source.file "scraper_logs" {
   targets = [
     {
-      __path__ = "/home/botuser/dealnews1/logs/container_runs/*.log",
+      __path__ = "/home/botuser/*/logs/container_runs/*.log",
       host     = sys.env("COMMON_HOST_LABEL"),
-      repo     = "dealnews1",
       stream   = "container",
     },
     {
-      __path__ = "/home/botuser/dealnews1/logs/cron_runs/*.log",
+      __path__ = "/home/botuser/*/logs/cron_runs/*.log",
       host     = sys.env("COMMON_HOST_LABEL"),
-      repo     = "dealnews1",
-      stream   = "cron",
-    },
-    {
-      __path__ = "/home/botuser/dealmoon1/logs/container_runs/*.log",
-      host     = sys.env("COMMON_HOST_LABEL"),
-      repo     = "dealmoon1",
-      stream   = "container",
-    },
-    {
-      __path__ = "/home/botuser/dealmoon1/logs/cron_runs/*.log",
-      host     = sys.env("COMMON_HOST_LABEL"),
-      repo     = "dealmoon1",
       stream   = "cron",
     },
   ]
 
-  forward_to = [loki.write.grafana_cloud.receiver]
+  forward_to = [loki.process.add_repo_label.receiver]
 
   file_match {
     enabled     = true
     sync_period = "10s"
+  }
+}
+
+loki.process "add_repo_label" {
+  forward_to = [loki.write.grafana_cloud.receiver]
+
+  stage.regex {
+    source     = "filename"
+    expression = "/home/botuser/(?P<repo>[^/]+)/logs/"
+  }
+
+  stage.labels {
+    values = {
+      repo = "",
+    }
   }
 }
 
