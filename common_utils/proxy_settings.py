@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+
+logger = logging.getLogger("common_utils.proxy_settings")
 
 
 def _set_env_defaults_from_file(path: Path) -> None:
@@ -176,6 +180,17 @@ def build_proxy_config_for_provider(provider_name: str) -> dict | None:
 
 
 def get_proxy_order() -> list[str]:
+    """Resolve the provider fetch order for this repo.
+
+    This is intentionally a pure read of this repo's own `PROXY` env var:
+    the fetch/retry *mechanism* (iterate this list, in order, trying each
+    provider until one succeeds — see StealthProxyRunner.fetch()) lives
+    here in common, but the *sequence itself* — whether DIRECT is included
+    at all, and where — is entirely repo-specific. Some repos want DIRECT
+    first (try a plain connection, only reach for a proxy on failure), some
+    may not want DIRECT in the mix at all; that choice belongs in each
+    repo's own .env, not as a default forced on every consumer here.
+    """
     raw = _get_str("PROXY", "DIRECT")
     order = [
         normalized
@@ -192,7 +207,14 @@ def build_proxy_configs(settings: SharedProxySettings | None = None) -> list[dic
         if provider_name == "DIRECT":
             configs.append(build_direct_config())
             continue
-        config = build_proxy_config_for_provider(provider_name)
+        try:
+            config = build_proxy_config_for_provider(provider_name)
+        except ValueError:
+            # A typo or unsupported entry in one repo's PROXY env var
+            # shouldn't crash the whole job — skip it and keep going with
+            # whatever providers (including DIRECT) are still configured.
+            logger.warning("Unknown proxy provider '%s' in PROXY; skipping", provider_name)
+            continue
         if config is None:
             continue
         if provider_name == "EVOMI":
