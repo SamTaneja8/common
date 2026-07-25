@@ -11,6 +11,10 @@ WORKDIR /var/www/app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
+        fonts-liberation \
+        fonts-dejavu-core \
+        fonts-noto-core \
+        fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --upgrade pip setuptools wheel \
@@ -27,6 +31,14 @@ RUN python -m pip install --upgrade pip setuptools wheel \
 RUN python -m playwright install --with-deps chromium \
     && python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(headless=True); page = browser.new_page(); page.goto('data:text/html,<title>ok</title><h1>ok</h1>'); assert page.title() == 'ok'; browser.close(); p.stop()" \
     && rm -rf /var/lib/apt/lists/*
+
+# Record the Chromium build actually bundled above so
+# common_utils.stealth.context_builder.bundled_chromium_major_version() can
+# build honest User-Agent strings at runtime instead of a hand-maintained
+# guess. Built once here (rather than duplicated per consuming repo) since
+# both dealnews1 and dealmoon1 pull from this same image and would report
+# the identical real version anyway.
+RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(); open('/etc/chromium_version', 'w').write(b.version); b.close(); p.stop()"
 
 COPY . /tmp/common
 RUN python -m pip install --no-cache-dir /tmp/common \
