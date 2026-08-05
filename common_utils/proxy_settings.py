@@ -227,4 +227,9 @@ def build_proxy_configs(settings: SharedProxySettings | None = None) -> list[dic
             config = build_floppydata_config(settings)
         if config is not None:
             configs.append(config)
+    if len(configs) > 1:
+        logger.info(
+            "Proxy failover order active=%s",
+            " -> ".join(str(config["name"]) for config in configs),
+        )
     return configs

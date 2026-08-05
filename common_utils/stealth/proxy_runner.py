@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -10,10 +11,17 @@ from common_utils.proxy_settings import build_proxy_configs
 from common_utils.proxy_telemetry import record_proxy_attempt, record_proxy_failure, record_proxy_success
 from common_utils.stealth.bot_detection import detect_bot_challenge
 from common_utils.stealth.context_builder import ContextBuilder
-from common_utils.stealth.exceptions import BotBlockedError
+from common_utils.stealth.exceptions import BotBlockedError, ProxyFailure
 from common_utils.stealth.navigation import scroll_and_wait, warm_session
 
 logger = logging.getLogger("common_utils.stealth.proxy_runner")
+
+# Bounded retry within a single provider before rotating to the next one.
+# ProxyFailure (and BotBlockedError, its subclass) means "this provider/IP
+# is bad" -- retrying the same provider on those wastes a browser launch and
+# is unlikely to help, so only non-ProxyFailure exceptions (transient
+# navigation timeouts, unexpected errors) get retried before rotating.
+PER_PROVIDER_ATTEMPTS = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,26 +74,43 @@ class StealthProxyRunner:
             for proxy_config in configs:
                 provider_name = str(proxy_config["name"])
                 playwright_proxy = proxy_config.get("playwright")
-                record_proxy_attempt(provider_name, step_name)
-                try:
-                    return await self._fetch_with_provider(
-                        playwright=playwright,
-                        provider_name=provider_name,
-                        playwright_proxy=playwright_proxy,
-                        url=url,
-                        step_name=step_name,
-                        wait_until=wait_until,
-                        timeout_ms=timeout_ms,
-                        warmup_urls=warmup_urls,
-                        scroll=scroll,
-                        min_scrolls=min_scrolls,
-                        max_scrolls=max_scrolls,
-                        selector=selector,
-                        metadata=metadata or {},
-                    )
-                except Exception as exc:
-                    provider_errors.append(f"{provider_name}: {exc}")
-                    record_proxy_failure(provider_name, step_name, type(exc).__name__, str(exc))
+                last_exc: Exception | None = None
+                for attempt in range(1, PER_PROVIDER_ATTEMPTS + 1):
+                    record_proxy_attempt(provider_name, step_name)
+                    try:
+                        return await self._fetch_with_provider(
+                            playwright=playwright,
+                            provider_name=provider_name,
+                            playwright_proxy=playwright_proxy,
+                            url=url,
+                            step_name=step_name,
+                            wait_until=wait_until,
+                            timeout_ms=timeout_ms,
+                            warmup_urls=warmup_urls,
+                            scroll=scroll,
+                            min_scrolls=min_scrolls,
+                            max_scrolls=max_scrolls,
+                            selector=selector,
+                            metadata=metadata or {},
+                        )
+                    except Exception as exc:
+                        last_exc = exc
+                        record_proxy_failure(provider_name, step_name, type(exc).__name__, str(exc))
+                        if isinstance(exc, ProxyFailure):
+                            # This provider/IP is bad -- rotate immediately,
+                            # retrying it would just waste a browser launch.
+                            break
+                        if attempt < PER_PROVIDER_ATTEMPTS:
+                            logger.warning(
+                                "Stealth fetch provider=%s step=%s attempt=%s/%s failed, retrying: %s",
+                                provider_name,
+                                step_name,
+                                attempt,
+                                PER_PROVIDER_ATTEMPTS,
+                                exc,
+                            )
+                            await asyncio.sleep(2 * attempt)
+                provider_errors.append(f"{provider_name}: {last_exc}")
         raise RuntimeError(f"{self.job_name} failed for all providers: {' | '.join(provider_errors)}")
 
     async def _fetch_with_provider(
