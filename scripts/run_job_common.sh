@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Shared helper that standardizes how scheduled jobs are launched for scraper-style
+# repos: reports job start/failure to common_utils.metering_cli (exporting
+# JOB_RUN_ID/JOB_TRIGGER_SOURCE/JOB_ARGUMENTS_JSON) and tees command output while
+# preserving the wrapped command's exit code.
+# Usage: run_job_common.sh <service> <job-name> <command...>
 set -euo pipefail
 
 if [[ $# -lt 3 ]]; then

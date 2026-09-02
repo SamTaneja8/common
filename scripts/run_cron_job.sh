@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Simple VPS cron wrapper: runs one repo-owned command now (no missed-job replay
+# logic), guards against overlapping runs with a lock file, writes a durable
+# timestamped log under <workdir>/logs/cron_runs, and prunes logs older than
+# LOG_SAVE_DAYS (read from --env-file, --common-env-file, or defaulted to 7).
+# Usage: run_cron_job.sh --name <job-name> --workdir <repo-dir> [options] -- <command...>
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

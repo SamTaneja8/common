@@ -338,3 +338,25 @@ def shell_mark_failure(
         error_lines=detail_message.splitlines()[-10:],
         exit_code=exit_code,
     )
+
+
+def shell_mark_success(
+    run_uuid: str,
+    job_name: str,
+    service_name: str,
+    detail_message: str | None = None,
+) -> None:
+    meter = JobMeter(
+        job_name=job_name,
+        service_name=service_name,
+        trigger_source="shell",
+        parameters={},
+        run_uuid=run_uuid,
+    )
+    meter.finish(
+        status="SUCCESS",
+        success=True,
+        message_json={"status": "SUCCESS", "source": "shell-wrapper"},
+        detail_message=detail_message,
+        exit_code=0,
+    )

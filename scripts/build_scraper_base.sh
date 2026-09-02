@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Builds the shared scraper-base Docker image (used by dealnews1/dealmoon1/amazonnew)
+# from Dockerfile.scraper-base, tagging it with a versioned tag and the floating
+# alias tag, then runs cleanup_scraper_base_images.sh to prune old versions.
+# Usage: build_scraper_base.sh [options] [legacy-full-image-tag]
+#   See --help for flags (--version, --image-repo, --alias-tag, --skip-cleanup, --cleanup-dry-run).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

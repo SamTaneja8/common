@@ -3,7 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 
-from common_utils.metering import JobMeter, ensure_metering_table, shell_mark_failure
+from common_utils.metering import (
+    JobMeter,
+    ensure_metering_table,
+    shell_mark_failure,
+    shell_mark_success,
+)
 
 
 def main() -> int:
@@ -25,6 +30,12 @@ def main() -> int:
     fail_parser.add_argument("--exit-code", required=True, type=int)
     fail_parser.add_argument("--detail-message", required=True)
 
+    finish_parser = subparsers.add_parser("finish")
+    finish_parser.add_argument("--job-name", required=True)
+    finish_parser.add_argument("--service-name", required=True)
+    finish_parser.add_argument("--run-id", required=True)
+    finish_parser.add_argument("--detail-message", default=None)
+
     args = parser.parse_args()
     ensure_metering_table()
 
@@ -36,6 +47,15 @@ def main() -> int:
             parameters=json.loads(args.arguments_json),
         )
         meter.start(step_name=args.step_name, detail_message=args.detail_message)
+        return 0
+
+    if args.command == "finish":
+        shell_mark_success(
+            run_uuid=args.run_id,
+            job_name=args.job_name,
+            service_name=args.service_name,
+            detail_message=args.detail_message,
+        )
         return 0
 
     shell_mark_failure(

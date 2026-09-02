@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Installs/configures the shared Grafana Cloud Alloy plumbing on a VPS from
+# common/.env: writes /etc/default/alloy and /etc/alloy/config.alloy, then
+# enables/restarts the alloy service.
+# Usage: setup_grafana_alloy.sh [options]; requires GCLOUD_HOSTED_METRICS_URL,
+#   GCLOUD_HOSTED_METRICS_ID, GCLOUD_SCRAPE_INTERVAL, GCLOUD_HOSTED_LOGS_URL,
+#   GCLOUD_HOSTED_LOGS_ID, GCLOUD_RW_API_KEY (see --help for flags).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -68,6 +68,11 @@ loki.source.file "scraper_logs" {
       host     = sys.env("COMMON_HOST_LABEL"),
       stream   = "cron",
     },
+    {
+      __path__ = "/home/botuser/*/logs/service_runs/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      stream   = "service",
+    },
   ]
 
   forward_to = [loki.process.add_repo_label.receiver]

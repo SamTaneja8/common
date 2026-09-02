@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Deletes unused local tags for the shared scraper-base image. Preserves tags
+# referenced by running/stopped containers, by any repo's .env SCRAPER_BASE_IMAGE
+# setting, or passed explicitly via --preserve.
+# Usage: cleanup_scraper_base_images.sh [--image-repo <repo>] [--preserve <ref> ...] [--dry-run]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
