@@ -71,5 +71,21 @@ class ContextFilter(logging.Filter):
 
 
 def install_context_filter(logger: logging.Logger | None = None) -> None:
+    """Attaches the filter to the logger's HANDLERS, not the logger itself.
+    A filter added via Logger.addFilter() only runs for records that
+    originate on that exact logger object -- records from a child logger
+    (the normal logging.getLogger(__name__) pattern) reach this logger's
+    handlers via propagation without ever passing through this logger's own
+    filter, so run_uuid/context_fields would never get set on them and
+    LOG_FORMAT's %(run_uuid)s would KeyError for almost every real call
+    site. Handler.filter() runs for every record the handler receives
+    regardless of origin, so that's where this has to live."""
     target = logger or logging.getLogger()
-    target.addFilter(ContextFilter())
+    context_filter = ContextFilter()
+    for handler in target.handlers:
+        # Idempotent: the same handler object is commonly shared across
+        # several loggers (e.g. reviewgate reassigns gunicorn's handlers
+        # onto multiple named loggers), so this can be called once per
+        # logger without stacking duplicate filters on a shared handler.
+        if not any(isinstance(existing, ContextFilter) for existing in handler.filters):
+            handler.addFilter(context_filter)
