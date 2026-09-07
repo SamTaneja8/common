@@ -5,6 +5,7 @@ import logging
 import os
 import uuid
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Iterator
 
 
@@ -12,6 +13,32 @@ LOG_FORMAT = (
     "%(asctime)s %(levelname)s [run=%(run_uuid)s]%(context_fields)s "
     "[%(threadName)s] %(name)s: %(message)s"
 )
+
+
+def resolve_log_dir(*, log_home: str | None, project_name: str | None, default_dir: Path) -> Path:
+    """Resolves the directory a repo's log files should be written to, given
+    its LOG_HOME/PROJECT_NAME settings.
+
+    - LOG_HOME unset/empty: use default_dir (each repo's own local logs/,
+      which is what docker-compose.yml actually volume-mounts).
+    - LOG_HOME set: used as-is, with project_name appended as a
+      subdirectory if set. A *relative* LOG_HOME is intentionally left
+      relative rather than manually anchored anywhere -- ordinary
+      relative-path semantics (relative to the process's CWD) are what
+      whoever set LOG_HOME=./something would expect. A previous version of
+      this logic (each repo had its own copy) instead force-anchored a
+      relative LOG_HOME at the filesystem root, so LOG_HOME=./ silently
+      resolved to "/" + project_name -- outside any mounted volume, so
+      every run's log was written and then permanently discarded the
+      moment its --rm container exited. That's a much worse failure mode
+      than "wrote to an unexpected but discoverable relative path."
+    """
+    if not log_home:
+        return default_dir
+    base = Path(log_home).expanduser()
+    if project_name:
+        base = base / project_name
+    return base
 
 _run_uuid_var: contextvars.ContextVar[str] = contextvars.ContextVar("run_uuid", default="")
 _context_fields_var: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
