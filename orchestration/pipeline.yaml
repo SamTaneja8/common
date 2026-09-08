@@ -1,0 +1,88 @@
+# Daily cross-repo pipeline schedule, run in order by run_pipeline.py.
+#
+# Every step calls common/scripts/run_script.sh <repo>/<scripts-or-jobs>/<script.sh>
+# -- the same wrapper you'd use to run one job by hand -- so nothing about
+# locking, per-invocation logging, or MySQL job telemetry changes; the
+# orchestrator just sequences these calls and waits for each to finish
+# before starting the next, instead of guessing at cron time offsets.
+#
+# Fields per step:
+#   name         Short identifier, used for pipeline_run.current_step_name
+#                and as a fallback job-name suffix.
+#   script       Path to the target script, relative to the directory that
+#                contains this repo (i.e. common's parent dir).
+#   args         Extra positional args passed through to the script (list).
+#   batch_env    Env var name this script reads for "how many items to pick
+#                up per run". Omit entirely for a first-scanner step (e.g.
+#                the ingest jobs) that has nothing upstream to pick up from.
+#   batch_size   Value to set batch_env to.
+#   repeat       How many times to invoke this step per pipeline run
+#                (default 1). Each repeat gets its own run_uuid/job_run_metering
+#                row, so repeated smaller batches show up as separate,
+#                individually-tracked runs rather than one big one.
+#   on_failure   "halt" stops the whole pipeline run (status=FAILED) if this
+#                step fails; "continue" logs it and moves on (pipeline_run
+#                ends as PARTIAL if anything failed this way). Default:
+#                "continue".
+
+sequence:
+  - name: dealnews1-ingest
+    script: dealnews1/scripts/run_ingest_container.sh
+    args: ["--no-deps"]
+    on_failure: halt
+
+  - name: dealnews1-redirects
+    script: dealnews1/scripts/run_redirect_container.sh
+    args: ["--no-deps"]
+    batch_env: SELECT_LIMIT
+    batch_size: 25
+    repeat: 2
+    on_failure: continue
+
+  - name: dealmoon1-ingest
+    script: dealmoon1/scripts/run_ingest_container.sh
+    args: ["--no-deps"]
+    on_failure: halt
+
+  - name: dealmoon1-redirects
+    script: dealmoon1/scripts/run_redirect_container.sh
+    args: ["--no-deps"]
+    batch_env: SELECT_LIMIT
+    batch_size: 25
+    repeat: 2
+    on_failure: continue
+
+  - name: amzn-affiliate-ingest
+    script: amazonnew/jobs/run_amzn_affiliate_ingest.sh
+    batch_env: AMZN_BATCH_SIZE
+    batch_size: 10
+    repeat: 1
+    on_failure: continue
+
+  - name: amzn-page-scan
+    script: amazonnew/jobs/run_amzn_page_scan.sh
+    batch_env: AMAZON_PAGE_SCAN_BATCH_SIZE
+    batch_size: 10
+    repeat: 1
+    on_failure: continue
+
+  - name: amzn-dealnews-pipeline
+    script: amazonnew/jobs/run_dealnews_pipeline.sh
+    batch_env: DEALNEWS_PUBLISH_LIMIT
+    batch_size: 2
+    repeat: 3
+    on_failure: continue
+
+  - name: amzn-dealmoon-pipeline
+    script: amazonnew/jobs/run_dealmoon_pipeline.sh
+    batch_env: DEALMOON_PUBLISH_LIMIT
+    batch_size: 3
+    repeat: 3
+    on_failure: continue
+
+  - name: amzn-ai-enhancement
+    script: amazonnew/jobs/run_ai_enhancement_pipeline.sh
+    batch_env: AISTAGE_BATCH_SIZE
+    batch_size: 10
+    repeat: 1
+    on_failure: continue
