@@ -81,7 +81,7 @@ Docker image references must be lowercase.
 
 After each versioned build, the build script automatically runs:
 
-- [scripts/cleanup_scraper_base_images.sh](/Users/samtaneja/Codex/common/scripts/cleanup_scraper_base_images.sh)
+- [scripts/cleanup_scraper_base_images.sh](scripts/cleanup_scraper_base_images.sh)
 
 The cleanup logic preserves:
 
@@ -109,10 +109,10 @@ To preview cleanup without deleting anything:
 `common` also owns the shared VPS observability setup that replaces the old
 `vpsmonitor` logging and host-monitoring role:
 
-- [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy) tails app-owned log files, Docker JSON logs, host metrics, Docker container metrics, and Alloy self metrics into Grafana Cloud.
-- [scripts/run_cron_job.sh](/Users/samtaneja/Codex/common/scripts/run_cron_job.sh) is the simple shared cron wrapper for running one repo-owned job now.
-- [scripts/setup_grafana_alloy.sh](/Users/samtaneja/Codex/common/scripts/setup_grafana_alloy.sh) installs the Grafana-provided Alloy plumbing on VPS1/VPS2 using values from `common/.env`.
-- [docs/grafana-cloud-logging.md](/Users/samtaneja/Codex/common/docs/grafana-cloud-logging.md) documents the VPS install and cron examples.
+- [observability/alloy/config.alloy](observability/alloy/config.alloy) tails app-owned log files, Docker JSON logs, host metrics, Docker container metrics, and Alloy self metrics into Grafana Cloud.
+- [scripts/run_cron_job.sh](scripts/run_cron_job.sh) is the simple shared cron wrapper for running one repo-owned job now.
+- [scripts/setup_grafana_alloy.sh](scripts/setup_grafana_alloy.sh) installs the Grafana-provided Alloy plumbing on VPS1/VPS2 using values from `common/.env`.
+- [docs/grafana-cloud-logging.md](docs/grafana-cloud-logging.md) documents the VPS install and cron examples.
 
 The shared cron wrapper itself does not build images, clean Docker images,
 mutate MySQL, or replay missed jobs. Those operations stay repo-owned or

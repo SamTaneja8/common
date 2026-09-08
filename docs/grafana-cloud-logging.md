@@ -38,7 +38,7 @@ Docker's own JSON log files for those persistent containers:
 
 Alloy tails those files with:
 
-- [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy)
+- [observability/alloy/config.alloy](../observability/alloy/config.alloy)
 
 Each repo remains responsible for deleting old log files. `LOG_SAVE_DAYS` is
 resolved in this order:
@@ -100,7 +100,7 @@ On VPS2, use `--host-label vps2`.
 The script:
 
 - optionally runs Grafana Cloud's Linux binary installer
-- copies [observability/alloy/config.alloy](/Users/samtaneja/Codex/common/observability/alloy/config.alloy) to `/etc/alloy/config.alloy`
+- copies [observability/alloy/config.alloy](../observability/alloy/config.alloy) to `/etc/alloy/config.alloy`
 - writes the `GCLOUD_*` values to `/etc/default/alloy`
 - enables and restarts the Alloy service when `systemctl` is available
 
@@ -123,7 +123,7 @@ exporter later if you want query/cache/connection metrics inside Grafana.
 
 ## Cron Wrapper
 
-Use [scripts/run_cron_job.sh](/Users/samtaneja/Codex/common/scripts/run_cron_job.sh) from cron to run one repo-owned job now, with no catch-up replay:
+Use [scripts/run_cron_job.sh](../scripts/run_cron_job.sh) from cron to run one repo-owned job now, with no catch-up replay:
 
 ```cron
 0 * * * * /home/botuser/common/scripts/run_cron_job.sh --name dealnews1_full_cycle --workdir /home/botuser/dealnews1 -- /home/botuser/dealnews1/jobs/run_full_cycle.sh
