@@ -29,7 +29,7 @@ sequence:
   - name: dealnews1-ingest
     script: dealnews1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
-    on_failure: halt
+    on_failure: continue
 
   - name: dealnews1-redirects
     script: dealnews1/scripts/run_redirect_container.sh
@@ -42,7 +42,7 @@ sequence:
   - name: dealmoon1-ingest
     script: dealmoon1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
-    on_failure: halt
+    on_failure: continue
 
   - name: dealmoon1-redirects
     script: dealmoon1/scripts/run_redirect_container.sh
