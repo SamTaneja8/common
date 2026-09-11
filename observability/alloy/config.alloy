@@ -59,11 +59,6 @@ prometheus.scrape "alloy" {
 loki.source.file "scraper_logs" {
   targets = [
     {
-      __path__ = "/home/botuser/*/logs/*.log",
-      host     = sys.env("COMMON_HOST_LABEL"),
-      stream   = "app",
-    },
-    {
       __path__ = "/home/botuser/*/logs/container_runs/*.log",
       host     = sys.env("COMMON_HOST_LABEL"),
       stream   = "container",
