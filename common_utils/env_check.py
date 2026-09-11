@@ -10,11 +10,10 @@ see dealnews1/scripts/check_env_config.py for the reference shape:
     if __name__ == "__main__":
         raise SystemExit(run_cli(repo_dir=Path(__file__).resolve().parent.parent))
 
-Host dependency: PyYAML (pip3 install pyyaml) -- not bundled in any repo's
-own Docker image (see common/Dockerfile.scraper-base's pip install list),
-same stated dependency common/orchestration/run_pipeline.py already has.
-Runs directly on the host; no Docker/MySQL/network access needed, since
-this only ever reads local text files.
+PyYAML is used when available. A small fallback parser handles the limited
+schema shape used by these repos so the check can still run on a fresh host
+before dependencies are installed. Runs directly on local text files; no
+Docker/MySQL/network access needed.
 """
 
 from __future__ import annotations
@@ -50,14 +49,78 @@ def parse_env_file(path: Path) -> dict[str, str]:
 
 
 def load_schema(path: Path) -> list[dict[str, Any]]:
-    if yaml is None:
-        print("PyYAML is required: pip3 install pyyaml", file=sys.stderr)
-        raise SystemExit(2)
     if not path.is_file():
         print(f"Schema file not found: {path}", file=sys.stderr)
         raise SystemExit(2)
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw_text = path.read_text(encoding="utf-8")
+    if yaml is not None:
+        data = yaml.safe_load(raw_text) or {}
+    else:
+        data = _load_schema_without_pyyaml(raw_text)
     return data.get("variables", [])
+
+
+def _load_schema_without_pyyaml(raw_text: str) -> dict[str, Any]:
+    """Tiny parser for this repo family's env_schema.yaml files.
+
+    It intentionally supports only the subset we use here: top-level repo,
+    a top-level variables list, and scalar fields under each `- name:` item.
+    Folded/multiline descriptions are ignored after their key line because
+    validation never needs their content.
+    """
+    data: dict[str, Any] = {"variables": []}
+    current: dict[str, Any] | None = None
+    in_variables = False
+    skip_multiline_indent: int | None = None
+
+    for raw_line in raw_text.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        line = raw_line.strip()
+        if skip_multiline_indent is not None:
+            if indent > skip_multiline_indent and not line.startswith("- name:"):
+                continue
+            skip_multiline_indent = None
+        if line == "variables:":
+            in_variables = True
+            continue
+        if not in_variables:
+            if ":" in line:
+                key, _, value = line.partition(":")
+                data[key.strip()] = _parse_scalar(value.strip())
+            continue
+        if line.startswith("- name:"):
+            current = {"name": _parse_scalar(line.partition(":")[2].strip())}
+            data["variables"].append(current)
+            continue
+        if current is None or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if value in {">", ">-", "|", "|-"}:
+            skip_multiline_indent = indent
+            continue
+        current[key] = _parse_scalar(value)
+    return data
+
+
+def _parse_scalar(value: str) -> Any:
+    value = value.strip()
+    if not value:
+        return ""
+    was_quoted = value[0:1] in {'"', "'"} and value[-1:] == value[0] and len(value) >= 2
+    if was_quoted:
+        return value[1:-1]
+    lowered = value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered in {"null", "none"}:
+        return None
+    return value
 
 
 def check_required(env_values: dict[str, str], schema: list[dict[str, Any]]) -> list[str]:
@@ -69,7 +132,7 @@ def check_required(env_values: dict[str, str], schema: list[dict[str, Any]]) -> 
     left blank)."""
     problems: list[str] = []
     for var in schema:
-        if not var.get("required"):
+        if not _is_required(var, env_values):
             continue
         name = var["name"]
         placeholder = var.get("placeholder")
@@ -83,6 +146,25 @@ def check_required(env_values: dict[str, str], schema: list[dict[str, Any]]) -> 
         if placeholder is not None and value == placeholder:
             problems.append(f"PLACEHOLDER {name} -- still set to the .env.example placeholder ({placeholder!r})")
     return problems
+
+
+def _is_required(var: dict[str, Any], env_values: dict[str, str]) -> bool:
+    if var.get("required"):
+        return True
+    condition = var.get("required_when")
+    if not isinstance(condition, dict):
+        return False
+    name = str(condition.get("name", "")).strip()
+    if not name:
+        return False
+    value = env_values.get(name, "")
+    if "equals" in condition:
+        return value == str(condition["equals"])
+    if "not_equals" in condition:
+        return value != str(condition["not_equals"])
+    if condition.get("not_empty"):
+        return bool(value)
+    return False
 
 
 def check_provider_credentials(
