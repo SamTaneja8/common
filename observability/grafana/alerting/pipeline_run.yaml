@@ -1,12 +1,11 @@
 # Orchestrator sequence alerts, reading pipeline_run directly (telemetry_db).
 #
 # The most important rule here is pipeline-run-degraded: with every
-# production step in pipeline.yaml now on_failure: continue, the
-# orchestrator's own process exit code stays 0 for a run that finishes
-# status=PARTIAL (run_pipeline.py's main() only returns non-zero for
-# status=FAILED) -- so any process-level/cron-level monitoring watching
-# exit codes would treat a degraded run as healthy. This alert is the only
-# thing that actually catches PARTIAL, not just FAILED.
+# production step in pipeline.yaml now on_failure: continue, a degraded run
+# can complete the sequence with status=PARTIAL. run_pipeline.py also exits
+# non-zero for PARTIAL so cron/process monitors can see it, but this alert
+# remains the rich signal because it points at pipeline_run and the linked
+# job_run_metering rows for drilldown.
 #
 # pipeline-run-missing is a dead-man's-switch: it does not check *whether*
 # a run failed, it checks whether a pipeline_run row was created at all --

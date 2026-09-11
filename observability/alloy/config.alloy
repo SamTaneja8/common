@@ -59,6 +59,11 @@ prometheus.scrape "alloy" {
 loki.source.file "scraper_logs" {
   targets = [
     {
+      __path__ = "/home/botuser/*/logs/*.log",
+      host     = sys.env("COMMON_HOST_LABEL"),
+      stream   = "app",
+    },
+    {
       __path__ = "/home/botuser/*/logs/container_runs/*.log",
       host     = sys.env("COMMON_HOST_LABEL"),
       stream   = "container",
@@ -94,6 +99,66 @@ loki.process "add_repo_label" {
   stage.labels {
     values = {
       repo = "repo",
+    }
+  }
+
+  stage.regex {
+    expression = "(?P<level>DEBUG|INFO|WARNING|ERROR|CRITICAL)"
+  }
+
+  stage.regex {
+    expression = "\\[run=(?P<run_uuid>[^\\]]+)\\]"
+  }
+
+  stage.regex {
+    expression = "\\[pipeline_run=(?P<pipeline_run_id>[^\\]]+)\\]"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)job(?:_name)?=(?P<job_name>[^\\s]+)"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)step(?:_name)?=(?P<step_name>[^\\s]+)"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)stage=(?P<deal_stage>[^\\s]+)"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)status=(?P<deal_status>[^\\s]+)"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)content_id=(?P<content_id>[^\\s]+)"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)asin=(?P<asin>[^\\s]+)"
+  }
+
+  stage.regex {
+    expression = "(?:^|\\s)review_queue_id=(?P<review_queue_id>[^\\s]+)"
+  }
+
+  stage.labels {
+    values = {
+      level       = "level",
+      job_name    = "job_name",
+      deal_stage  = "deal_stage",
+      deal_status = "deal_status",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      run_uuid        = "run_uuid",
+      pipeline_run_id = "pipeline_run_id",
+      step_name       = "step_name",
+      content_id      = "content_id",
+      asin            = "asin",
+      review_queue_id = "review_queue_id",
     }
   }
 }

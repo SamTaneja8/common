@@ -6,7 +6,8 @@ Alert rules for the orchestrator/telemetry work in this repo, written in Grafana
 
 - `alerting/host_resources.yaml` — host CPU/memory/disk exhaustion, reading the Prometheus metrics Alloy already ships (`prometheus.exporter.unix "host"` / `prometheus.exporter.cadvisor "docker"` in `../alloy/config.alloy`). No new metrics collection needed.
 - `alerting/job_telemetry.yaml` — a `job_run_metering` row stuck in `RUNNING` for 90+ minutes. Deliberately does **not** alert on every individual job `FAILED` — with every production `pipeline.yaml` step now `on_failure: continue`, some failures (e.g. dealnews.com's own 403) are expected and would make that pure noise.
-- `alerting/pipeline_run.yaml` — the three orchestrator-level checks: a run ending `PARTIAL`/`FAILED` (the main signal now that individual failures don't halt anything and the orchestrator's own exit code stays 0 for `PARTIAL`), a run stuck `RUNNING` past 3 hours, and a dead-man's-switch for zero `pipeline_run` rows in 26 hours (catches cron not firing or the orchestrator crashing before it can even create a row — neither other alert can see this, since it produces no row to alert on).
+- `alerting/pipeline_run.yaml` — the three orchestrator-level checks: a run ending `PARTIAL`/`FAILED`, a run stuck `RUNNING` past 3 hours, and a dead-man's-switch for zero `pipeline_run` rows in 26 hours (catches cron not firing or the orchestrator crashing before it can even create a row).
+- `alerting/discord_delivery.yaml` — detects summary Discord alerts that failed to send after the scraper job finished.
 - `alerting/contact_points.yaml` — placeholder Discord receiver + routing policy for all of the above.
 
 ## Before applying any of this
@@ -14,6 +15,8 @@ Alert rules for the orchestrator/telemetry work in this repo, written in Grafana
 1. **Fill in the placeholders.** Every file has `<PROMETHEUS_DATASOURCE_UID>`, `<MYSQL_TELEMETRY_DATASOURCE_UID>`, or `<DISCORD_WEBHOOK_URL>` — real values, not invented ones, since I have no access to your Grafana Cloud instance to look them up. Find a data source's UID in Grafana under Connections → Data sources → (the data source) → its settings page URL.
 2. **Add the MySQL data source if it isn't already configured** — the `job_run_metering`/`pipeline_run` queries need a MySQL data source pointed at `telemetry_db` in Grafana Cloud, which was already recommended (Private Data Source Connect, not a public port) back when `deal_correlation`/`pipeline_run` were first scoped. If that's not set up yet, `job_telemetry.yaml`/`pipeline_run.yaml` have nothing to query against.
 3. **Apply `pipeline_run.sql` first** if you haven't — these alert rules query columns (`pipeline_run.status`, `failed_step_name`, etc.) that don't exist until that migration runs against `telemetry_db`.
+4. **Apply `../sql/alert_delivery_columns.sql`** before enabling `discord_delivery.yaml`.
+5. **Set the Discord/Grafana link env vars in the app jobs** if you want Discord alerts to deep-link back into Grafana: `GRAFANA_BASE_URL`, `GRAFANA_LOGS_DASHBOARD_UID`, and optionally `GRAFANA_RUN_DASHBOARD_UID`. The logs dashboard accepts `var-search`, `var-run_uuid`, `var-pipeline_run_id`, `var-content_id`, and `var-asin`.
 
 ## How to apply
 

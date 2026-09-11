@@ -1,0 +1,62 @@
+# Discord delivery alerts, reading deals_ingest/deals_redirect in telemetry_db.
+#
+# REPLACE <MYSQL_TELEMETRY_DATASOURCE_UID> with the Grafana Cloud MySQL data
+# source UID pointed at telemetry_db.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: discord-delivery
+    folder: Orchestration Alerts
+    interval: 5m
+    rules:
+      - uid: discord-summary-alert-delivery-failed
+        title: Discord summary alert delivery failed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: <MYSQL_TELEMETRY_DATASOURCE_UID>
+            model:
+              rawSql: >-
+                SELECT COUNT(*) AS value
+                FROM (
+                  SELECT run_uuid
+                  FROM deals_ingest
+                  WHERE discord_sent = 0
+                    AND created_at > UTC_TIMESTAMP() - INTERVAL 6 HOUR
+                  UNION ALL
+                  SELECT run_uuid
+                  FROM deals_redirect
+                  WHERE discord_sent = 0
+                    AND created_at > UTC_TIMESTAMP() - INTERVAL 6 HOUR
+                ) failed_delivery
+              format: table
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              refId: B
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: NoData
+        execErrState: Error
+        for: 0m
+        labels:
+          severity: warning
+          category: job-telemetry
+        annotations:
+          summary: One or more summary Discord alerts failed to deliver
+          description: >-
+            Query deals_ingest/deals_redirect for discord_sent = 0 and inspect
+            discord_error plus alert_payload_json. Use the run_uuid from those
+            rows in the logs dashboard correlation variables.

@@ -40,6 +40,30 @@ CREATE TABLE IF NOT EXISTS `pipeline_run` (
 -- instead of guessing from timestamp ranges. NULL for jobs run standalone
 -- (manually, or a bare cron entry outside the orchestrator) -- orchestrated
 -- and non-orchestrated runs share the same table either way.
-ALTER TABLE `job_run_metering`
-  ADD COLUMN `pipeline_run_id` varchar(64) DEFAULT NULL AFTER `run_uuid`,
-  ADD KEY `idx_job_run_metering_pipeline_run_id` (`pipeline_run_id`);
+SET @db_name := DATABASE();
+
+SET @ddl := (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE `job_run_metering` ADD COLUMN `pipeline_run_id` varchar(64) DEFAULT NULL AFTER `run_uuid`',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = @db_name AND table_name = 'job_run_metering' AND column_name = 'pipeline_run_id'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE `job_run_metering` ADD KEY `idx_job_run_metering_pipeline_run_id` (`pipeline_run_id`)',
+    'SELECT 1'
+  )
+  FROM information_schema.statistics
+  WHERE table_schema = @db_name AND table_name = 'job_run_metering' AND index_name = 'idx_job_run_metering_pipeline_run_id'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

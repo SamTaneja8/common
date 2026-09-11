@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib import request
 
+from .discord_alerts import build_playwright_exception_embed
+
 try:
     import mysql.connector
 except ImportError:  # pragma: no cover
@@ -565,34 +567,15 @@ class PlaywrightExceptionPipeline:
         if not self.discord_webhook_url:
             return False
 
-        lines = [
-            f"**Playwright Exception: {payload['repo_name']} / {payload['step_name']}**",
-            f"Job: {payload['job_name']}",
-            f"Type: {payload['error_type']}",
-            f"Error: {payload['error_message']}",
-        ]
-        if payload.get("item_key") and payload.get("item_value"):
-            lines.append(f"{payload['item_key']}: {payload['item_value']}")
-        if payload.get("sch_start"):
-            lines.append(f"Scheduled slot: {payload['sch_start']}")
-        if payload.get("target_url"):
-            lines.append(f"Target: {payload['target_url']}")
-        if payload.get("final_url"):
-            lines.append(f"Final: {payload['final_url']}")
-        if payload.get("proxy_provider"):
-            lines.append(f"Proxy: {payload['proxy_provider']}")
-        if payload_artifact_path:
-            lines.append(f"Payload: {payload_artifact_path}")
-        if html_artifact_path:
-            lines.append(f"HTML: {html_artifact_path}")
-        if screenshot_artifact_path:
-            lines.append(f"Screenshot: {screenshot_artifact_path}")
-        lines.append(f"Exception ID: {payload['exception_uuid']}")
-
-        content = "\n".join(lines)[:1900]
+        embed = build_playwright_exception_embed(
+            payload=payload,
+            payload_artifact_path=payload_artifact_path,
+            html_artifact_path=html_artifact_path,
+            screenshot_artifact_path=screenshot_artifact_path,
+        )
         webhook_request = request.Request(
             self.discord_webhook_url,
-            data=json.dumps({"content": content}).encode("utf-8"),
+            data=json.dumps({"embeds": [embed]}).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )

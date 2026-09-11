@@ -221,6 +221,7 @@ def run_step(step: dict[str, Any], pipeline_run_id: str, log: logging.LoggerAdap
         job_run_id = str(uuid.uuid4())
         env = os.environ.copy()
         env["JOB_RUN_ID"] = job_run_id
+        env["PIPELINE_RUN_ID"] = pipeline_run_id
         if batch_env:
             env[batch_env] = str(batch_size)
 
@@ -306,7 +307,7 @@ def main() -> int:
 
     finish_pipeline_run(pipeline_run_id, status, started_at, config, failed_step_name, error_summary)
     log.info("Pipeline run finished status=%s", status)
-    return 0 if status != "FAILED" else 1
+    return 0 if status == "SUCCESS" else 1
 
 
 if __name__ == "__main__":

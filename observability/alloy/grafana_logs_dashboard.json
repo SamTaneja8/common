@@ -192,7 +192,7 @@
             "uid": "${DS_LOKI}"
           },
           "editorMode": "code",
-          "expr": "{host=~\"$host\", repo=~\"$repo\", stream=~\"$stream\"} |= \"$search\"",
+          "expr": "{host=~\"$host\", repo=~\"$repo\", stream=~\"$stream\"} |= \"$search\" |= \"$run_uuid\" |= \"$pipeline_run_id\" |= \"$content_id\" |= \"$asin\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -207,6 +207,43 @@
         "prettifyLogMessage": false,
         "dedupStrategy": "none"
       }
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 4,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "editorMode": "code",
+          "expr": "{host=~\"$host\", repo=~\"$repo\", stream=~\"$stream\"} |= \"$run_uuid\" |= \"$pipeline_run_id\" |= \"$content_id\" |= \"$asin\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Correlation Drilldown Logs",
+      "type": "logs"
     }
   ],
   "refresh": "10s",
@@ -301,6 +338,74 @@
         "query": "",
         "skipUrlSync": false,
         "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "value": ""
+        },
+        "hide": 0,
+        "name": "run_uuid",
+        "options": [
+          {
+            "selected": true,
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "value": ""
+        },
+        "hide": 0,
+        "name": "pipeline_run_id",
+        "options": [
+          {
+            "selected": true,
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "value": ""
+        },
+        "hide": 0,
+        "name": "content_id",
+        "options": [
+          {
+            "selected": true,
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "value": ""
+        },
+        "hide": 0,
+        "name": "asin",
+        "options": [
+          {
+            "selected": true,
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
       }
     ]
   },
@@ -320,6 +425,6 @@
   "timezone": "browser",
   "title": "VPS Scrapers Log Dashboard",
   "uid": "vps_scrapers_logs",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
