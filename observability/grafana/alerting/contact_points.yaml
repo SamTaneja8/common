@@ -1,0 +1,32 @@
+# Minimal contact point + routing policy for the alert rules in this
+# directory. This is a placeholder -- fill in a real receiver before
+# applying, then repoint the route below at its name if you rename it.
+#
+# REPLACE <DISCORD_WEBHOOK_URL> (or swap the whole receiver block for an
+# email/Slack/PagerDuty one -- see Grafana's contact point docs for other
+# `type` values) with a real notification target. Several repos in this
+# project already have a Discord webhook wired up for other alerts
+# (DISCORD_WEBHOOK_URL/DISCORD_EXCEPTION_URL in dealnews1/dealmoon1/
+# amazonnew's .env) -- reusing one of those keeps notifications in one
+# place rather than adding a new channel.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: orchestration-alerts
+    receivers:
+      - uid: orchestration-alerts-discord
+        type: discord
+        settings:
+          url: <DISCORD_WEBHOOK_URL>
+          use_discord_username: true
+
+policies:
+  - orgId: 1
+    receiver: orchestration-alerts
+    group_by: ["alertname"]
+    matchers:
+      - category =~ "host-resources|job-telemetry|pipeline-run"
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

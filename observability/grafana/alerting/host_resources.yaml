@@ -1,0 +1,116 @@
+# Host resource exhaustion alerts. Queries the Prometheus (Mimir) metrics
+# Alloy already ships from prometheus.exporter.unix "host" and
+# prometheus.exporter.cadvisor "docker" (see ../alloy/config.alloy) -- no new
+# metrics collection needed, this only adds thresholds on data already
+# flowing.
+#
+# REPLACE <PROMETHEUS_DATASOURCE_UID> below with the actual UID of the
+# Grafana Cloud Prometheus/Mimir data source (Grafana UI -> Connections ->
+# Data sources -> that data source -> the UID is in the URL / settings page).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: host-resources
+    folder: Orchestration Alerts
+    interval: 5m
+    rules:
+      - uid: host-cpu-exhaustion
+        title: Host CPU exhaustion
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <PROMETHEUS_DATASOURCE_UID>
+            model:
+              editorMode: code
+              expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: warning
+          category: host-resources
+        annotations:
+          summary: Host CPU usage has been above 90% for 10+ minutes
+          description: >-
+            Sustained high CPU can stack up with the orchestrator's own
+            resource gate (run_pipeline.py's wait_for_capacity) delaying
+            every subsequent pipeline step. Check `top`/`docker stats` on the
+            VPS for the offending container.
+
+      - uid: host-memory-exhaustion
+        title: Host memory exhaustion
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <PROMETHEUS_DATASOURCE_UID>
+            model:
+              editorMode: code
+              expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: warning
+          category: host-resources
+        annotations:
+          summary: Host memory usage has been above 90% for 10+ minutes
+          description: >-
+            Playwright/Chromium jobs (dealnews1/dealmoon1/amazonnew) are the
+            most likely memory pressure source -- check for a stuck redirect
+            subprocess that never got reaped.
+
+      - uid: host-disk-exhaustion
+        title: Host disk exhaustion
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <PROMETHEUS_DATASOURCE_UID>
+            model:
+              editorMode: code
+              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+        noDataState: NoData
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: warning
+          category: host-resources
+        annotations:
+          summary: Root filesystem is above 85% full
+          description: >-
+            Check logs/redirect_debug (screenshots + HTML dumps accumulate
+            fast) and each repo's LOG_SAVE_DAYS retention across all 5 repos
+            before assuming this needs more disk.

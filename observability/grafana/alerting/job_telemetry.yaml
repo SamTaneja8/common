@@ -1,0 +1,63 @@
+# Per-job telemetry alerts, reading job_run_metering directly (telemetry_db).
+# Deliberately does NOT alert on every individual job ending FAILED -- with
+# every production pipeline.yaml step now on_failure: continue, some job
+# failures (e.g. dealnews.com's own 403 on click.html) are expected/known
+# and would make a per-failure alert pure noise. This only covers a job
+# that's stuck -- never reached a terminal status at all -- which is always
+# a real problem regardless of failure tolerance.
+#
+# REPLACE <MYSQL_TELEMETRY_DATASOURCE_UID> below with the actual UID of the
+# Grafana Cloud MySQL data source pointed at telemetry_db.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: job-telemetry
+    folder: Orchestration Alerts
+    interval: 5m
+    rules:
+      - uid: job-stuck-running
+        title: A job has been stuck in RUNNING
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: <MYSQL_TELEMETRY_DATASOURCE_UID>
+            model:
+              rawSql: >-
+                SELECT COUNT(*) AS value
+                FROM job_run_metering
+                WHERE status = 'RUNNING'
+                  AND started_at < UTC_TIMESTAMP() - INTERVAL 90 MINUTE
+              format: table
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              refId: B
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: critical
+          category: job-telemetry
+        annotations:
+          summary: A job_run_metering row has been status=RUNNING for over 90 minutes
+          description: >-
+            90 minutes is well past any single job's own internal timeouts
+            (redirect resolution's 600s batch wait, 90s per-target subprocess
+            timeout, etc.) -- if the row never closed out, either the process
+            crashed before calling metering_cli.py finish/shell-fail, or
+            MySQL was unreachable when it tried to. Check
+            logs/container_runs/ for that run_uuid directly.

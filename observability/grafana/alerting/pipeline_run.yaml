@@ -1,0 +1,160 @@
+# Orchestrator sequence alerts, reading pipeline_run directly (telemetry_db).
+#
+# The most important rule here is pipeline-run-degraded: with every
+# production step in pipeline.yaml now on_failure: continue, the
+# orchestrator's own process exit code stays 0 for a run that finishes
+# status=PARTIAL (run_pipeline.py's main() only returns non-zero for
+# status=FAILED) -- so any process-level/cron-level monitoring watching
+# exit codes would treat a degraded run as healthy. This alert is the only
+# thing that actually catches PARTIAL, not just FAILED.
+#
+# pipeline-run-missing is a dead-man's-switch: it does not check *whether*
+# a run failed, it checks whether a pipeline_run row was created at all --
+# catching cron not firing, or the orchestrator crashing before it even
+# reaches create_pipeline_run(). Neither of the other alerts here (or
+# anywhere else in this project) can see that failure mode, since it
+# produces no row to alert on in the first place.
+#
+# REPLACE <MYSQL_TELEMETRY_DATASOURCE_UID> below with the actual UID of the
+# Grafana Cloud MySQL data source pointed at telemetry_db.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pipeline-run
+    folder: Orchestration Alerts
+    interval: 5m
+    rules:
+      - uid: pipeline-run-degraded
+        title: Pipeline run ended PARTIAL or FAILED
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 86400, to: 0 }
+            datasourceUid: <MYSQL_TELEMETRY_DATASOURCE_UID>
+            model:
+              rawSql: >-
+                SELECT COUNT(*) AS value
+                FROM pipeline_run
+                WHERE status IN ('PARTIAL', 'FAILED')
+                  AND started_at > UTC_TIMESTAMP() - INTERVAL 1 DAY
+              format: table
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              refId: B
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: NoData
+        execErrState: Error
+        for: 0m
+        labels:
+          severity: warning
+          category: pipeline-run
+        annotations:
+          summary: A pipeline run in the last 24h ended PARTIAL or FAILED
+          description: >-
+            Query pipeline_run for status, failed_step_name, and
+            error_summary, then job_run_metering WHERE pipeline_run_id = ...
+            to see exactly which step(s) failed and why.
+
+      - uid: pipeline-run-stalled
+        title: Pipeline run stuck in RUNNING
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: <MYSQL_TELEMETRY_DATASOURCE_UID>
+            model:
+              rawSql: >-
+                SELECT COUNT(*) AS value
+                FROM pipeline_run
+                WHERE status = 'RUNNING'
+                  AND started_at < UTC_TIMESTAMP() - INTERVAL 3 HOUR
+              format: table
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              refId: B
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: critical
+          category: pipeline-run
+        annotations:
+          summary: A pipeline run has been status=RUNNING for over 3 hours
+          description: >-
+            3 hours is well past what the current 9-step sequence should
+            need even with repeats and resource-gate waits. The
+            orchestrator's own crash-safety net (run_pipeline.py's top-level
+            except) should have closed this out as FAILED -- if it's still
+            RUNNING, the orchestrator process itself likely died
+            (OOM-killed, host reboot) without a chance to run that handler.
+
+      - uid: pipeline-run-missing
+        title: No pipeline run recorded recently
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 93600, to: 0 }
+            datasourceUid: <MYSQL_TELEMETRY_DATASOURCE_UID>
+            model:
+              rawSql: >-
+                SELECT COUNT(*) AS value
+                FROM pipeline_run
+                WHERE started_at > UTC_TIMESTAMP() - INTERVAL 26 HOUR
+              format: table
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              refId: B
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        noDataState: Alerting
+        execErrState: Error
+        for: 0m
+        labels:
+          severity: critical
+          category: pipeline-run
+        annotations:
+          summary: No pipeline_run row created in the last 26 hours
+          description: >-
+            The daily schedule (0 6 * * *) should produce one row per day --
+            zero in 26h means either cron isn't firing at all, or
+            run_pipeline.py is crashing before it can even call
+            create_pipeline_run(). Check `crontab -l` and whether
+            /usr/bin/python3 /home/botuser/common/orchestration/run_pipeline.py
+            runs cleanly by hand.
