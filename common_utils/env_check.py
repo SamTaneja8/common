@@ -209,6 +209,53 @@ def check_provider_credentials(
     return problems
 
 
+def _format_env_value(value: str) -> str:
+    """Quotes a value for safe placement in a KEY=value line if it contains
+    a space or `#` (which would otherwise start an inline comment or split
+    the value on re-parsing); left bare otherwise, matching how most
+    values already look in these .env/.env.example files."""
+    if value and (" " in value or "#" in value):
+        escaped = value.replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
+
+def render_env(example_path: Path, env_path: Path) -> str:
+    """Rebuilds a full .env by walking .env.example line by line -- keeping
+    every comment, blank line, and section grouping exactly as written --
+    but substituting each variable's value with whatever is actually
+    configured in env_path, falling back to .env.example's own value when
+    the real .env doesn't set that key at all.
+
+    Useful whenever .env.example gains new variables or gets reorganized
+    (new sections, updated comments) and you want a fresh, fully-commented
+    .env matching that structure without manually re-merging already-
+    configured real values by hand -- e.g. `check_env_config.py
+    --render-env > .env.new`. Variables that exist only in the real .env
+    and not in .env.example are intentionally left out: .env.example is
+    the documented, canonical variable list here, and a value present in
+    .env but missing from .env.example is exactly the drift
+    diff_against_example() already exists to catch separately.
+    """
+    if not example_path.is_file():
+        print(f"Example file not found: {example_path}", file=sys.stderr)
+        raise SystemExit(2)
+
+    real_values = parse_env_file(env_path)
+    output_lines: list[str] = []
+    for raw_line in example_path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            output_lines.append(raw_line)
+            continue
+        key_name = raw_line.partition("=")[0].strip()
+        if key_name in real_values:
+            output_lines.append(f"{key_name}={_format_env_value(real_values[key_name])}")
+        else:
+            output_lines.append(raw_line)
+    return "\n".join(output_lines) + "\n"
+
+
 def diff_against_example(schema: list[dict[str, Any]], example_path: Path) -> list[str]:
     example_values = parse_env_file(example_path)
     schema_names = {var["name"] for var in schema}
@@ -250,10 +297,24 @@ def run_cli(
     parser.add_argument("--example-file", default=str(default_example_file))
     parser.add_argument("--common-env-file", default=str(default_common_env_file))
     parser.add_argument("--diff-example", action="store_true", help="Also report drift between the schema and .env.example")
+    parser.add_argument(
+        "--render-env",
+        action="store_true",
+        help=(
+            "Print a new .env to stdout: .env.example's structure/comments/grouping, with each "
+            "variable's value taken from the real --env-file when set (falling back to .env.example's "
+            "own value otherwise). Prints only the rendered file, nothing else, so it can be redirected "
+            "straight into a new .env -- e.g. check_env_config.py --render-env > .env.new"
+        ),
+    )
     args = parser.parse_args(argv)
 
     env_path = Path(args.env_file)
     schema_path = Path(args.schema)
+
+    if args.render_env:
+        print(render_env(Path(args.example_file), env_path), end="")
+        return 0
 
     schema = load_schema(schema_path)
     if not env_path.is_file():
