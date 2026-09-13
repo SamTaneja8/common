@@ -174,7 +174,28 @@ class StealthProxyRunner:
             if scroll:
                 stage = "scroll"
                 logger.info("Stealth fetch provider=%s stage=%s min_scrolls=%s max_scrolls=%s", provider_name, stage, min_scrolls, max_scrolls)
-                await scroll_and_wait(page, min_scrolls=min_scrolls, max_scrolls=max_scrolls)
+                # scroll_and_wait's own page.mouse.move/wheel/evaluate calls
+                # take no timeout of their own (unlike goto/wait_for_selector
+                # right above, which both pass timeout_ms) -- confirmed live:
+                # a stuck browser mid-scroll hung for 22+ minutes with zero
+                # progress, recovered only by a manual kill. Reuses timeout_ms
+                # (the same budget already governing goto/wait_for_selector
+                # here) rather than a separate knob. Scrolling is best-effort
+                # anti-bot behavior, not required content -- a timeout here
+                # logs a warning and falls through to grab whatever's already
+                # on the page instead of aborting the whole fetch attempt.
+                try:
+                    await asyncio.wait_for(
+                        scroll_and_wait(page, min_scrolls=min_scrolls, max_scrolls=max_scrolls),
+                        timeout=timeout_ms / 1000,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Stealth fetch provider=%s stage=%s timed out after %ss -- continuing without it",
+                        provider_name,
+                        stage,
+                        timeout_ms / 1000,
+                    )
             stage = "content"
             logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
             html = await page.content()
