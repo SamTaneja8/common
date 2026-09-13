@@ -85,7 +85,7 @@ sequence:
     script: amazonnew/jobs/run_amzn_page_scan.sh
     schedule: "0 6 * * *"
     batch_env: AMAZON_PAGE_SCAN_BATCH_SIZE
-    batch_size: 10
+    batch_size: 2
     repeat: 1
     on_failure: continue
 
@@ -94,21 +94,21 @@ sequence:
     schedule: "0 6 * * *"
     batch_env: DEALNEWS_PUBLISH_LIMIT
     batch_size: 2
-    repeat: 3
+    repeat: 1
     on_failure: continue
 
   - name: amzn-dealmoon-pipeline
     script: amazonnew/jobs/run_dealmoon_pipeline.sh
     schedule: "0 6 * * *"
     batch_env: DEALMOON_PUBLISH_LIMIT
-    batch_size: 3
-    repeat: 3
+    batch_size: 2
+    repeat: 1
     on_failure: continue
 
   - name: amzn-ai-enhancement
     script: amazonnew/jobs/run_ai_enhancement_pipeline.sh
     schedule: "0 6 * * *"
     batch_env: AISTAGE_BATCH_SIZE
-    batch_size: 10
+    batch_size: 8
     repeat: 1
     on_failure: continue
