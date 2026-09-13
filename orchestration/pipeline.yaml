@@ -1,4 +1,7 @@
-# Daily cross-repo pipeline schedule, run in order by run_pipeline.py.
+# Cross-repo pipeline schedule, run in order by run_pipeline.py. cron
+# invokes run_pipeline.py itself once an hour (0 * * * *); which of the
+# steps below actually execute on a given invocation is decided by each
+# step's own `schedule`, checked against the current local time.
 #
 # Every step calls common/scripts/run_script.sh <repo>/<scripts-or-jobs>/<script.sh>
 # -- the same wrapper you'd use to run one job by hand -- so nothing about
@@ -12,6 +15,20 @@
 #   script       Path to the target script, relative to the directory that
 #                contains this repo (i.e. common's parent dir).
 #   args         Extra positional args passed through to the script (list).
+#   schedule     Standard 5-field cron expression (minute hour day-of-month
+#                month day-of-weekday). Checked against the current local
+#                time on each hourly invocation -- since cron only wakes
+#                run_pipeline.py once an hour, write this in terms of which
+#                hour(s) it should fire on (e.g. "0 */2 * * *" for every 2
+#                hours), not specific minutes; a minute other than :00 will
+#                never match. Omit entirely to make a step always eligible,
+#                every invocation (matches the old, pre-schedule behavior).
+#                All steps below currently share the same "0 6 * * *" --
+#                the exact daily-6am cadence this pipeline always ran at --
+#                so this is a like-for-like migration onto the new field,
+#                not a behavior change; adjust individual steps' schedules
+#                independently whenever a different cadence is actually
+#                wanted.
 #   batch_env    Env var name this script reads for "how many items to pick
 #                up per run". Omit entirely for a first-scanner step (e.g.
 #                the ingest jobs) that has nothing upstream to pick up from.
@@ -29,11 +46,13 @@ sequence:
   - name: dealnews1-ingest
     script: dealnews1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
+    schedule: "0 6 * * *"
     on_failure: continue
 
   - name: dealnews1-redirects
     script: dealnews1/scripts/run_redirect_container.sh
     args: ["--no-deps"]
+    schedule: "0 6 * * *"
     batch_env: SELECT_LIMIT
     batch_size: 25
     repeat: 2
@@ -42,11 +61,13 @@ sequence:
   - name: dealmoon1-ingest
     script: dealmoon1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
+    schedule: "0 6 * * *"
     on_failure: continue
 
   - name: dealmoon1-redirects
     script: dealmoon1/scripts/run_redirect_container.sh
     args: ["--no-deps"]
+    schedule: "0 6 * * *"
     batch_env: SELECT_LIMIT
     batch_size: 25
     repeat: 2
@@ -54,6 +75,7 @@ sequence:
 
   - name: amzn-affiliate-ingest
     script: amazonnew/jobs/run_amzn_affiliate_ingest.sh
+    schedule: "0 6 * * *"
     batch_env: AMZN_BATCH_SIZE
     batch_size: 10
     repeat: 1
@@ -61,6 +83,7 @@ sequence:
 
   - name: amzn-page-scan
     script: amazonnew/jobs/run_amzn_page_scan.sh
+    schedule: "0 6 * * *"
     batch_env: AMAZON_PAGE_SCAN_BATCH_SIZE
     batch_size: 10
     repeat: 1
@@ -68,6 +91,7 @@ sequence:
 
   - name: amzn-dealnews-pipeline
     script: amazonnew/jobs/run_dealnews_pipeline.sh
+    schedule: "0 6 * * *"
     batch_env: DEALNEWS_PUBLISH_LIMIT
     batch_size: 2
     repeat: 3
@@ -75,6 +99,7 @@ sequence:
 
   - name: amzn-dealmoon-pipeline
     script: amazonnew/jobs/run_dealmoon_pipeline.sh
+    schedule: "0 6 * * *"
     batch_env: DEALMOON_PUBLISH_LIMIT
     batch_size: 3
     repeat: 3
@@ -82,6 +107,7 @@ sequence:
 
   - name: amzn-ai-enhancement
     script: amazonnew/jobs/run_ai_enhancement_pipeline.sh
+    schedule: "0 6 * * *"
     batch_env: AISTAGE_BATCH_SIZE
     batch_size: 10
     repeat: 1
