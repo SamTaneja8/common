@@ -4,3 +4,7 @@
 __pycache__/
 *.pyc
 *.egg-info/
+
+# Log bundles copied down from the servers for debugging -- may contain
+# credentials or webhook URLs, never commit.
+logs.tar.gz
