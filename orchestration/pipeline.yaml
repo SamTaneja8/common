@@ -56,13 +56,13 @@ sequence:
   - name: dealnews1-ingest
     script: dealnews1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
-    schedule: "0 6 * * *"
+    schedule: "0 */2 * * *"
     on_failure: continue
 
   - name: dealnews1-redirects
     script: dealnews1/scripts/run_redirect_container.sh
     args: ["--no-deps"]
-    schedule: "0 6 * * *"
+    schedule: "0 */2 * * *"
     batch_env: SELECT_LIMIT
     batch_size: 25
     repeat: 2
@@ -71,16 +71,16 @@ sequence:
   - name: dealmoon1-ingest
     script: dealmoon1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
-    schedule: "0 6 * * *"
+    schedule: "0 */2 * * *"
     on_failure: continue
 
   - name: dealmoon1-redirects
     script: dealmoon1/scripts/run_redirect_container.sh
     args: ["--no-deps"]
-    schedule: "0 6 * * *"
+    schedule: "0 */2 * * *"
     batch_env: SELECT_LIMIT
     batch_size: 25
-    repeat: 2
+    repeat: 1
     on_failure: continue
 
   - name: amzn-affiliate-ingest
@@ -115,10 +115,27 @@ sequence:
     repeat: 1
     on_failure: continue
 
+  # --auto-publish: finished deals go straight to Dealvant with no human
+  # review in reviewgate. Flags belong in args, never in `script` (that's
+  # used as a file path, so "script.sh --flag" fails with Script not found).
   - name: amzn-ai-enhancement
     script: amazonnew/jobs/run_ai_enhancement_pipeline.sh
+    args: ["--auto-publish"]
     schedule: "0 6 * * *"
     batch_env: AISTAGE_BATCH_SIZE
     batch_size: 8
     repeat: 1
+    on_failure: continue
+
+  # Weekly Docker disk cleanup (deal-pipeline/scripts/docker_cleanup.sh):
+  # prunes build cache unused for 7+ days and dangling images; never removes
+  # tagged images, volumes or running containers, and never stops hung job
+  # containers (that stays a manual --stop-stuck decision). Sunday 03:00
+  # server time, an hour when no other step is due. Needs deal-pipeline
+  # checked out next to common; if it isn't, only this step fails. vps2 has
+  # no orchestrator and runs the same script from its own crontab.
+  - name: docker-cleanup
+    script: deal-pipeline/scripts/docker_cleanup.sh
+    args: ["--apply"]
+    schedule: "0 3 * * 0"
     on_failure: continue
