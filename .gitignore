@@ -8,3 +8,14 @@ __pycache__/
 # Log bundles copied down from the servers for debugging -- may contain
 # credentials or webhook URLs, never commit.
 logs.tar.gz
+
+# Written by scripts/build_scraper_base.sh on every build.
+/.last_scraper_base_build
+
+# A manual Grafana Alloy install unpacked in the repo root on VPS1 (binary,
+# its config and data dir). Anchored to the root: observability/alloy/config.alloy
+# is tracked and must stay that way.
+/alloy-linux-amd64
+/alloy-linux-amd64.zip
+/config.alloy
+/data-alloy/
