@@ -21,8 +21,28 @@ CREATE TABLE IF NOT EXISTS `deal_correlation` (
     `dealvant_target_table` VARCHAR(64) DEFAULT NULL,
     `dealvant_target_id` VARCHAR(255) DEFAULT NULL,
     `published_at` DATETIME DEFAULT NULL,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_deal_correlation_source` (`source_repo`, `content_id`),
     KEY `ix_deal_correlation_asin` (`asin`),
     KEY `ix_deal_correlation_dealvant_target` (`dealvant_target_table`, `dealvant_target_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- updated_at is the backup watermark (dashboard's jobs/run_backup.sh): rows
+-- are updated in place when a deal is published, so an id watermark would
+-- keep only the pre-publish version. Added here too for tables created before
+-- the column existed; safe to re-run.
+SET @db_name := DATABASE();
+
+SET @ddl := (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE `deal_correlation` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `published_at`',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = @db_name AND table_name = 'deal_correlation' AND column_name = 'updated_at'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

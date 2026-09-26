@@ -127,6 +127,37 @@ sequence:
     repeat: 1
     on_failure: continue
 
+  # Backups. Each repo declares WHAT it backs up in its own .env
+  # (BACKUP_* / REPO_MYSQL_BACKUP_TABLE_SPECS); setup_mysql's engine does the
+  # dump and Backblaze upload; the schedule for each repo is set here, per
+  # step. 05:00 is an odd hour (no scraper step due) before the 06:00 amazonnew
+  # run. Needs setup_mysql's backup engine + Backblaze credentials on VPS1.
+  # dealvant (VPS2) is scheduled from VPS2's crontab.
+  - name: dealnews1-backup
+    script: dealnews1/jobs/run_backup.sh
+    schedule: "0 5 * * *"
+    on_failure: continue
+
+  - name: dealmoon1-backup
+    script: dealmoon1/jobs/run_backup.sh
+    schedule: "0 5 * * *"
+    on_failure: continue
+
+  - name: amazonnew-backup
+    script: amazonnew/jobs/run_backup.sh
+    schedule: "0 5 * * *"
+    on_failure: continue
+
+  - name: reviewgate-backup
+    script: reviewgate/jobs/run_backup.sh
+    schedule: "0 5 * * *"
+    on_failure: continue
+
+  - name: dashboard-backup
+    script: dashboard/jobs/run_backup.sh
+    schedule: "0 5 * * *"
+    on_failure: continue
+
   # Weekly Docker disk cleanup (deal-pipeline/scripts/docker_cleanup.sh):
   # prunes build cache unused for 7+ days and dangling images; never removes
   # tagged images, volumes or running containers, and never stops hung job
