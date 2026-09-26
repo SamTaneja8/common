@@ -10,6 +10,9 @@ Purpose: start, stop, or invoke the repo runtime and its recurring operational e
 
 - `run_job_common.sh`: Shared helper that standardizes how scheduled jobs are launched for scraper-style repos.
 - `run_cron_job.sh`: Simple VPS cron wrapper that runs one repo-owned command now, writes a durable cron log, prunes old cron logs using `LOG_SAVE_DAYS`, and avoids missed-job replay logic.
+- `run_script.sh`: Standard-pattern cron entrypoint (`run_script.sh <repo>/<scripts-or-jobs>/<script.sh> [args]`) that derives `--workdir`/`--name` from the target script's path and delegates to `run_cron_job.sh`; also how `orchestration/run_pipeline.py` invokes each pipeline step.
+- `check_proxy_balances.sh`: Daily proxy authorization/balance check (Evomi, FloppyData), log-only. Ported from the retired vpsmonitor repo; scheduled via `orchestration/pipeline.yaml`.
+- `check_api_balances.sh`: Daily API provider authorization/balance check (OpenAI, HuggingFace, DeepSeek, Gemini), logged and persisted to `telemetry_db.api_balance_check`. Ported from the retired vpsmonitor repo; scheduled via `orchestration/pipeline.yaml`.
 - `setup_grafana_alloy.sh`: Installs/configures the shared Grafana Cloud Alloy plumbing on a VPS from `common/.env`, writes `/etc/default/alloy`, installs `/etc/alloy/config.alloy`, and restarts Alloy.
 
 ## Build and image management

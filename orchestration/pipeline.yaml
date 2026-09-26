@@ -43,6 +43,16 @@
 #                "continue".
 
 sequence:
+  - name: proxy-balance-check
+    script: common/scripts/check_proxy_balances.sh
+    schedule: "0 6 * * *"
+    on_failure: continue
+
+  - name: api-balance-check
+    script: common/scripts/check_api_balances.sh
+    schedule: "0 6 * * *"
+    on_failure: continue
+
   - name: dealnews1-ingest
     script: dealnews1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
