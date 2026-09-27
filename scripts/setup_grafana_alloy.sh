@@ -100,10 +100,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -f "${ENV_FILE}" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "${ENV_FILE}"
-  set +a
+  # shellcheck source=load_env.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/load_env.sh"
+  load_env_file "${ENV_FILE}"
 fi
 
 HOST_LABEL="${HOST_LABEL:-${COMMON_HOST_LABEL:-}}"

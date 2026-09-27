@@ -41,6 +41,7 @@ import json
 import logging
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -329,6 +330,56 @@ def wait_for_capacity(
     log.warning("Proceeding despite sustained high load after waiting %ss", max_wait_seconds)
 
 
+DEFAULT_STEP_TIMEOUT_MINUTES = 90
+TIMEOUT_EXIT_CODE = 124
+
+
+def _job_containers(project: str) -> set[str]:
+    """IDs of running one-off `docker compose run` containers of a compose
+    project (a repo's job containers). Empty if Docker isn't reachable."""
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "-q", "--no-trunc",
+             "--filter", f"label=com.docker.compose.project={project}",
+             "--filter", "label=com.docker.compose.oneoff=True"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return set(out.stdout.split()) if out.returncode == 0 else set()
+
+
+def _run_with_timeout(cmd: list[str], env: dict[str, str], step: dict[str, Any], log: logging.LoggerAdapter) -> int:
+    """Runs one step invocation, killing it after the step's timeout_minutes
+    (default DEFAULT_STEP_TIMEOUT_MINUTES). A job that never exits used to
+    hold its container and memory for days (dealmoon1, 2026-09). On timeout
+    the whole process group gets SIGTERM, then SIGKILL after 30 s, and any
+    job container this invocation started is stopped. Returns the exit code,
+    or TIMEOUT_EXIT_CODE."""
+    timeout_s = float(step.get("timeout_minutes", DEFAULT_STEP_TIMEOUT_MINUTES)) * 60
+    project = str(step["script"]).split("/", 1)[0]
+    containers_before = _job_containers(project)
+    proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+    try:
+        return proc.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        log.error("Step timed out step=%s after %.0f min; stopping it", step["name"], timeout_s / 60)
+        for sig, grace in ((signal.SIGTERM, 30), (signal.SIGKILL, 10)):
+            try:
+                os.killpg(proc.pid, sig)
+            except ProcessLookupError:
+                break
+            try:
+                proc.wait(timeout=grace)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        for container in sorted(_job_containers(project) - containers_before):
+            log.error("Stopping job container left by timed-out step=%s container=%s", step["name"], container[:12])
+            subprocess.run(["docker", "stop", container], capture_output=True, timeout=60)
+        return TIMEOUT_EXIT_CODE
+
+
 def run_step(step: dict[str, Any], pipeline_run_id: str, log: logging.LoggerAdapter) -> bool:
     """Runs one step's `repeat` invocations in sequence. Returns True if all
     of them succeeded (or repeat wasn't set -- single run), False if any
@@ -360,17 +411,17 @@ def run_step(step: dict[str, Any], pipeline_run_id: str, log: logging.LoggerAdap
             batch_size if batch_env else "-",
             " ".join(cmd),
         )
-        result = subprocess.run(cmd, env=env)
+        returncode = _run_with_timeout(cmd, env, step, log)
         link_job_run(pipeline_run_id, job_run_id)
 
-        if result.returncode != 0:
+        if returncode != 0:
             log.error(
                 "Step failed step=%s iteration=%s/%s job_run_id=%s exit_code=%s",
                 name,
                 iteration,
                 repeat,
                 job_run_id,
-                result.returncode,
+                returncode,
             )
             all_succeeded = False
         else:

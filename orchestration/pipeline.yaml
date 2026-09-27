@@ -37,6 +37,10 @@
 #                (default 1). Each repeat gets its own run_uuid/job_run_metering
 #                row, so repeated smaller batches show up as separate,
 #                individually-tracked runs rather than one big one.
+#   timeout_minutes  Longest one invocation may run before the orchestrator
+#                stops it (process group, then any job container it started)
+#                and records it as failed (exit 124). Default 90. Guards
+#                against jobs that hang forever instead of failing.
 #   on_failure   "halt" stops the whole pipeline run (status=FAILED) if this
 #                step fails; "continue" logs it and moves on (pipeline_run
 #                ends as PARTIAL if anything failed this way). Default:
@@ -83,9 +87,12 @@ sequence:
     repeat: 1
     on_failure: continue
 
+  # Paused: needs Amazon Creators API credentials, which don't exist yet, so
+  # it failed every day. "0 0 31 2 *" (Feb 31) never matches. Restore
+  # "0 6 * * *" once AMAZON_CREATORS_API_* are set in amazonnew/.env.
   - name: amzn-affiliate-ingest
     script: amazonnew/jobs/run_amzn_affiliate_ingest.sh
-    schedule: "0 6 * * *"
+    schedule: "0 0 31 2 *"
     batch_env: AMZN_BATCH_SIZE
     batch_size: 10
     repeat: 1
