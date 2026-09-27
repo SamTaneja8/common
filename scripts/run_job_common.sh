@@ -15,15 +15,22 @@ SERVICE_NAME="$1"
 JOB_NAME="$2"
 shift 2
 
-# Host jobs run with the system Python; Ubuntu 24.04 has `python3` but no
-# `python` unless python-is-python3 is installed.
-PY="${PYTHON:-python3}"
+COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Host jobs use common/.venv (scripts/setup_host_python.sh: a current
+# mysql-connector-python) when it exists, else python3. Ubuntu 24.04 has no
+# `python`, and its python3-mysql.connector can't connect on Python 3.12.
+if [[ -z "${PYTHON:-}" && -x "${COMMON_DIR}/.venv/bin/python" ]]; then
+  PY="${COMMON_DIR}/.venv/bin/python"
+else
+  PY="${PYTHON:-python3}"
+fi
 export PYTHON="${PY}"
 
 # Host-only settings (e.g. TELEMETRY_MYSQL_HOST=127.0.0.1, port 53306) live in
 # common/.env.host, which containers never load. Parsed, never `source`d; a
 # value already in the environment wins.
-HOST_ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env.host"
+HOST_ENV_FILE="${COMMON_DIR}/.env.host"
 if [[ -f "${HOST_ENV_FILE}" ]]; then
   while IFS=$'\t' read -r key value; do
     [[ -n "${key}" && -z "${!key:-}" ]] && export "${key}=${value}"

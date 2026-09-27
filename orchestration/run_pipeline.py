@@ -26,8 +26,12 @@ Multiple pipeline.yaml files are also still supported side by side via
 rather than as embedded per-step schedules in one shared file.
 
 Host dependencies (not bundled in any repo's image, since this never runs
-inside one): PyYAML and mysql-connector-python --
-    pip3 install pyyaml mysql-connector-python
+inside one): PyYAML and mysql-connector-python, in common/.venv --
+    common/scripts/setup_host_python.sh
+When run as a program, this script re-executes itself with common/.venv's
+Python if that exists, so the crontab line can keep using python3. (Ubuntu
+24.04's python3-mysql.connector is 8.0.15, which calls ssl.wrap_socket,
+removed in Python 3.12, and can't connect.)
 """
 
 from __future__ import annotations
@@ -44,6 +48,15 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+_VENV_PYTHON = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "python"
+if (
+    __name__ == "__main__"
+    and _VENV_PYTHON.exists()
+    and not os.environ.get("RUN_PIPELINE_IN_VENV")
+):
+    os.environ["RUN_PIPELINE_IN_VENV"] = "1"
+    os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON), *sys.argv])
 
 import yaml
 
@@ -186,7 +199,7 @@ def _load_env_file(path: Path) -> None:
 
 def _mysql_connection():
     if mysql is None:
-        raise RuntimeError("mysql-connector-python is not installed (Ubuntu: sudo apt install python3-mysql.connector)")
+        raise RuntimeError("mysql-connector-python is not installed; run common/scripts/setup_host_python.sh")
     return mysql.connector.connect(
         host=os.getenv("TELEMETRY_MYSQL_HOST", "unified-mysql"),
         port=int(os.getenv("TELEMETRY_MYSQL_PORT", "3306")),

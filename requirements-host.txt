@@ -1,0 +1,5 @@
+# Python packages for common's host-side scripts (orchestration/run_pipeline.py,
+# scripts/run_job_common.sh and the balance checks), installed into
+# common/.venv by scripts/setup_host_python.sh. Not used by any container.
+mysql-connector-python>=9.0,<10
+PyYAML>=6.0,<7
