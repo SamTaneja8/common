@@ -12,4 +12,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "${SCRIPT_DIR}/run_job_common.sh" \
   "common" \
   "API Balance Check" \
-  python -m common_utils.api_balance_check
+  "${PYTHON:-python3}" -m common_utils.api_balance_check

@@ -15,13 +15,40 @@ SERVICE_NAME="$1"
 JOB_NAME="$2"
 shift 2
 
-RUN_ID="${JOB_RUN_ID:-$(python - <<'PY'
+# Host jobs run with the system Python; Ubuntu 24.04 has `python3` but no
+# `python` unless python-is-python3 is installed.
+PY="${PYTHON:-python3}"
+export PYTHON="${PY}"
+
+# Host-only settings (e.g. TELEMETRY_MYSQL_HOST=127.0.0.1, port 53306) live in
+# common/.env.host, which containers never load. Parsed, never `source`d; a
+# value already in the environment wins.
+HOST_ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env.host"
+if [[ -f "${HOST_ENV_FILE}" ]]; then
+  while IFS=$'\t' read -r key value; do
+    [[ -n "${key}" && -z "${!key:-}" ]] && export "${key}=${value}"
+  done < <(awk -v q="'" '
+    { sub(/\r$/, "") }
+    /^[[:space:]]*(#|$)/ { next }
+    {
+      line = $0; sub(/^[[:space:]]*export[[:space:]]+/, "", line)
+      if (match(line, /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[=:]/)) {
+        k = substr(line, 1, RLENGTH - 1); sub(/[[:space:]]+$/, "", k)
+        v = substr(line, RLENGTH + 1); sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v)
+        f = substr(v, 1, 1)
+        if (length(v) >= 2 && (f == "\"" || f == q) && substr(v, length(v), 1) == f) v = substr(v, 2, length(v) - 2)
+        print k "\t" v
+      }
+    }' "${HOST_ENV_FILE}")
+fi
+
+RUN_ID="${JOB_RUN_ID:-$("$PY" - <<'PY'
 import uuid
 print(uuid.uuid4())
 PY
 )}"
 
-ARGUMENTS_JSON="$(python - <<'PY' "$@"
+ARGUMENTS_JSON="$("$PY" - <<'PY' "$@"
 import json
 import sys
 print(json.dumps({"script_args": sys.argv[1:]}))
@@ -35,7 +62,7 @@ export JOB_RUN_ID="$RUN_ID"
 export JOB_TRIGGER_SOURCE="${JOB_TRIGGER_SOURCE:-shell}"
 export JOB_ARGUMENTS_JSON="$ARGUMENTS_JSON"
 
-python -m common_utils.metering_cli start \
+"$PY" -m common_utils.metering_cli start \
   --job-name "$JOB_NAME" \
   --service-name "$SERVICE_NAME" \
   --trigger-source "$JOB_TRIGGER_SOURCE" \
@@ -49,7 +76,7 @@ EXIT_CODE=${PIPESTATUS[0]}
 set -e
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-  FAILURE_DETAIL="$(python - <<'PY' "$OUTPUT_FILE"
+  FAILURE_DETAIL="$("$PY" - <<'PY' "$OUTPUT_FILE"
 from pathlib import Path
 import sys
 
@@ -58,7 +85,7 @@ print("\n".join(lines[-20:] if lines else ["No output captured."]))
 PY
 )"
 
-  python -m common_utils.metering_cli shell-fail \
+  "$PY" -m common_utils.metering_cli shell-fail \
     --job-name "$JOB_NAME" \
     --service-name "$SERVICE_NAME" \
     --run-id "$RUN_ID" \

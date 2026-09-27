@@ -1,4 +1,5 @@
 .env
+.env.host
 .DS_Store
 .env.local
 __pycache__/

@@ -36,6 +36,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -166,20 +167,26 @@ def _load_env_file(path: Path) -> None:
     env_file -- there's no docker-compose here to do it automatically."""
     if not path.is_file():
         return
+    # Same forms Docker Compose accepts: KEY=value, KEY: value, export KEY=...,
+    # optionally quoted. The first value seen for a key wins.
+    pattern = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(.*)$")
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+        if not line or line.startswith("#"):
             continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        match = pattern.match(line)
+        if not match:
+            continue
+        key, value = match.group(1), match.group(2).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if key not in os.environ:
             os.environ[key] = value
 
 
 def _mysql_connection():
     if mysql is None:
-        raise RuntimeError("mysql-connector-python is not installed (pip3 install mysql-connector-python)")
+        raise RuntimeError("mysql-connector-python is not installed (Ubuntu: sudo apt install python3-mysql.connector)")
     return mysql.connector.connect(
         host=os.getenv("TELEMETRY_MYSQL_HOST", "unified-mysql"),
         port=int(os.getenv("TELEMETRY_MYSQL_PORT", "3306")),
@@ -365,6 +372,10 @@ def main() -> int:
     parser.add_argument("--trigger-source", default="cron")
     args = parser.parse_args()
 
+    # .env.host holds settings only host-side scripts need (this script runs
+    # on the host, not in Docker): TELEMETRY_MYSQL_HOST=127.0.0.1 / port 53306.
+    # It's read first so it wins over .env, which containers also load.
+    _load_env_file(COMMON_DIR / ".env.host")
     _load_env_file(COMMON_DIR / ".env")
 
     pipeline_file = Path(args.pipeline_file)
