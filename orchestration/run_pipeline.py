@@ -175,12 +175,13 @@ class _RunIdAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 
-def _load_env_file(path: Path) -> None:
-    """Minimal KEY=VALUE loader so this bare host script sees the same
-    TELEMETRY_MYSQL_* settings the containers get via docker-compose's
-    env_file -- there's no docker-compose here to do it automatically."""
+def _read_env_file(path: Path) -> dict[str, str]:
+    """Minimal KEY=VALUE parser so this bare host script sees the same
+    settings the containers get via docker-compose's env_file -- there's no
+    docker-compose here to do it automatically."""
+    values: dict[str, str] = {}
     if not path.is_file():
-        return
+        return values
     # Same forms Docker Compose accepts: KEY=value, KEY: value, export KEY=...,
     # optionally quoted. The first value seen for a key wins.
     pattern = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(.*)$")
@@ -194,8 +195,36 @@ def _load_env_file(path: Path) -> None:
         key, value = match.group(1), match.group(2).strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
-        if key not in os.environ:
-            os.environ[key] = value
+        values.setdefault(key, value)
+    return values
+
+
+def _load_env_file(path: Path) -> None:
+    for key, value in _read_env_file(path).items():
+        os.environ.setdefault(key, value)
+
+
+# The environment every step inherits; set by _prepare_environment().
+_STEP_BASE_ENV: dict[str, str] | None = None
+
+
+def _prepare_environment(common_dir: Path) -> dict[str, str]:
+    """Loads common/.env into this process, then overlays common/.env.host
+    for this process only, and returns the environment for steps.
+
+    .env.host holds host-only settings (TELEMETRY_MYSQL_HOST=127.0.0.1,
+    port 53306) for this script's own telemetry writes. Steps must not
+    inherit them: the repos' compose files take TELEMETRY_MYSQL_* from the
+    calling environment first, so every container job was pointed at
+    127.0.0.1:53306 -- itself -- and its metering writes failed. Host-side
+    steps (common/scripts/run_job_common.sh) read .env.host themselves.
+    A value already in the environment (cron's) still wins over both files.
+    """
+    host_only = {k: v for k, v in _read_env_file(common_dir / ".env.host").items() if k not in os.environ}
+    _load_env_file(common_dir / ".env")
+    step_env = os.environ.copy()
+    os.environ.update(host_only)
+    return step_env
 
 
 def _mysql_connection():
@@ -394,7 +423,7 @@ def run_step(step: dict[str, Any], pipeline_run_id: str, log: logging.LoggerAdap
     all_succeeded = True
     for iteration in range(1, repeat + 1):
         job_run_id = str(uuid.uuid4())
-        env = os.environ.copy()
+        env = dict(_STEP_BASE_ENV if _STEP_BASE_ENV is not None else os.environ)
         env["JOB_RUN_ID"] = job_run_id
         env["PIPELINE_RUN_ID"] = pipeline_run_id
         if batch_env:
@@ -436,11 +465,8 @@ def main() -> int:
     parser.add_argument("--trigger-source", default="cron")
     args = parser.parse_args()
 
-    # .env.host holds settings only host-side scripts need (this script runs
-    # on the host, not in Docker): TELEMETRY_MYSQL_HOST=127.0.0.1 / port 53306.
-    # It's read first so it wins over .env, which containers also load.
-    _load_env_file(COMMON_DIR / ".env.host")
-    _load_env_file(COMMON_DIR / ".env")
+    global _STEP_BASE_ENV
+    _STEP_BASE_ENV = _prepare_environment(COMMON_DIR)
 
     pipeline_file = Path(args.pipeline_file)
     config = yaml.safe_load(pipeline_file.read_text(encoding="utf-8"))
