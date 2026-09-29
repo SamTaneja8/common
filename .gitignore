@@ -24,3 +24,6 @@ logs.tar.gz
 
 # Local staging copies and per-table state of scripts/backup_postgres_to_backblaze.sh.
 /backups/
+
+# Job run logs and the orchestrator's cron log (written on the servers).
+/logs/

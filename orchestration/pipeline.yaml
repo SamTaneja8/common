@@ -177,3 +177,11 @@ sequence:
     args: ["--apply"]
     schedule: "0 3 * * 0"
     on_failure: continue
+
+  # Weekly trim of this orchestrator's own log. Cron appends its output to
+  # common/logs/orchestrator.log and nothing else rotates it; keeps 28 days.
+  - name: orchestrator-log-trim
+    script: common/scripts/trim_log.sh
+    args: ["logs/orchestrator.log", "28"]
+    schedule: "0 3 * * 0"
+    on_failure: continue
