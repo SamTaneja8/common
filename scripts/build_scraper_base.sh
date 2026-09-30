@@ -3,7 +3,14 @@
 # from Dockerfile.scraper-base, tagging it with a versioned tag and the floating
 # alias tag, then runs cleanup_scraper_base_images.sh to prune old versions.
 # Usage: build_scraper_base.sh [options] [legacy-full-image-tag]
-#   See --help for flags (--version, --image-repo, --alias-tag, --skip-cleanup, --cleanup-dry-run).
+#   See --help for flags (--version, --image-repo, --alias-tag, --skip-cleanup, --cleanup-dry-run, --force).
+#
+# Skips the build when nothing that goes into the image has changed: a
+# fingerprint of Dockerfile.scraper-base, .dockerignore and the files it
+# copies is stored as a label on the image and compared on the next run.
+# Changes elsewhere in common (orchestration/, other scripts, docs) then
+# cost nothing. --force rebuilds anyway, e.g. to pick up a newer
+# python:3.11-slim-bookworm or Playwright system packages.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,6 +20,8 @@ ALIAS_TAG="py311-playwright"
 VERSION_SUFFIX="$(date -u +%Y%m%d-%H%M%S)"
 SKIP_CLEANUP=false
 CLEANUP_DRY_RUN=false
+FORCE=false
+FINGERPRINT_LABEL="scraper-base.inputs-sha256"
 LEGACY_IMAGE_TAG=""
 
 usage() {
@@ -26,6 +35,7 @@ Options:
   --alias-tag <tag>        Floating compatibility tag. Default: py311-playwright
   --skip-cleanup           Do not run unused-version cleanup after the build.
   --cleanup-dry-run        Show which old tags would be removed without deleting them.
+  --force                  Build even if the image's inputs are unchanged.
 
 Legacy compatibility:
   Passing a single positional image tag keeps the old behavior and only tags that image.
@@ -58,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       CLEANUP_DRY_RUN=true
       shift
       ;;
+    --force)
+      FORCE=true
+      shift
+      ;;
     -h|--help)
       usage
       ;;
@@ -74,7 +88,29 @@ done
 VERSIONED_TAG="${IMAGE_REPO}:${ALIAS_TAG}-${VERSION_SUFFIX}"
 FLOATING_TAG="${IMAGE_REPO}:${ALIAS_TAG}"
 
-BUILD_ARGS=(-f "${PROJECT_DIR}/Dockerfile.scraper-base")
+# Everything the Dockerfile reads: itself, .dockerignore and its COPY sources.
+# Keep this list in step with the COPY lines in Dockerfile.scraper-base.
+inputs_fingerprint() {
+  local sha
+  sha="$(command -v sha256sum >/dev/null && echo sha256sum || echo 'shasum -a 256')"
+  (
+    cd "${PROJECT_DIR}"
+    find Dockerfile.scraper-base .dockerignore pyproject.toml common_utils bin/metering_cli.py \
+         scripts/run_job_common.sh -type f ! -path '*/__pycache__/*' ! -name '*.pyc' 2>/dev/null \
+      | LC_ALL=C sort | xargs ${sha}
+  ) | ${sha} | cut -d' ' -f1
+}
+FINGERPRINT="$(inputs_fingerprint)"
+
+if [[ -z "${LEGACY_IMAGE_TAG}" && "${FORCE}" == "false" ]]; then
+  current="$(docker image inspect -f "{{index .Config.Labels \"${FINGERPRINT_LABEL}\"}}" "${FLOATING_TAG}" 2>/dev/null || true)"
+  if [[ -n "${current}" && "${current}" == "${FINGERPRINT}" ]]; then
+    echo "${FLOATING_TAG} is current (inputs unchanged, ${FINGERPRINT:0:12}); not rebuilding. --force rebuilds anyway."
+    exit 0
+  fi
+fi
+
+BUILD_ARGS=(-f "${PROJECT_DIR}/Dockerfile.scraper-base" --label "${FINGERPRINT_LABEL}=${FINGERPRINT}")
 if [[ -n "${LEGACY_IMAGE_TAG}" ]]; then
   BUILD_ARGS+=(-t "${LEGACY_IMAGE_TAG}")
 else
