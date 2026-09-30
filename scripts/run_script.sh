@@ -11,7 +11,7 @@ set -euo pipefail
 #
 # Usage examples (from crontab, paths relative to this repo's parent dir):
 #   run_script.sh dealnews1/scripts/run_ingest_container.sh --no-deps
-#   run_script.sh dealmoon1/jobs/run_full_cycle.sh
+#   run_script.sh dealmoon1/scripts/run_redirect_container.sh --no-deps
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMMON_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
