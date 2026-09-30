@@ -14,6 +14,11 @@ from common_utils.stealth.context_builder import ContextBuilder
 from common_utils.stealth.exceptions import BotBlockedError, ProxyFailure
 from common_utils.stealth.navigation import scroll_and_wait, warm_session
 
+# Longest a browser/context close may take before it's abandoned. A wedged
+# Chromium can make close() wait forever; the job container's exit cleans
+# up whatever is left.
+CLOSE_TIMEOUT_S = 15
+
 logger = logging.getLogger("common_utils.stealth.proxy_runner")
 
 # Bounded retry within a single provider before rotating to the next one.
@@ -198,16 +203,21 @@ class StealthProxyRunner:
                     )
             stage = "content"
             logger.info("Stealth fetch provider=%s stage=%s", provider_name, stage)
-            html = await page.content()
+            # page.content(), page.title() and locator.count() take no timeout
+            # of their own, and on a wedged page they never return: dealmoon1
+            # ingest hung here for 90 min (2026-09-27, "stage=content" as the
+            # last log line). Same budget as goto; a timeout raises into the
+            # except below like any other failed fetch.
+            html = await asyncio.wait_for(page.content(), timeout=timeout_ms / 1000)
             try:
                 body_text = await page.locator("body").inner_text(timeout=5000)
             except Exception:
                 body_text = ""
-            page_title = await page.title()
+            page_title = await asyncio.wait_for(page.title(), timeout=timeout_ms / 1000)
             selector_confirmed = False
             if selector:
                 try:
-                    selector_confirmed = await page.locator(selector).count() > 0
+                    selector_confirmed = await asyncio.wait_for(page.locator(selector).count(), timeout=10) > 0
                 except Exception:
                     selector_confirmed = False
             bot_marker = detect_bot_challenge(page_title=page_title, body_text=body_text, html=html)
@@ -255,6 +265,17 @@ class StealthProxyRunner:
             raise
         finally:
             if context is not None:
-                await context.close()
+                await _close_quietly(context, "context", provider_name)
             if browser is not None:
-                await browser.close()
+                await _close_quietly(browser, "browser", provider_name)
+
+
+async def _close_quietly(target: Any, label: str, provider_name: str) -> None:
+    """close() with a time limit; failures are logged, never raised, so they
+    can't hide the fetch's own result or exception."""
+    try:
+        await asyncio.wait_for(target.close(), timeout=CLOSE_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        logger.warning("Stealth fetch provider=%s %s.close() timed out after %ss; abandoning it", provider_name, label, CLOSE_TIMEOUT_S)
+    except Exception as exc:
+        logger.warning("Stealth fetch provider=%s %s.close() failed: %s", provider_name, label, exc)

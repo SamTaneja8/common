@@ -61,6 +61,7 @@ sequence:
     script: dealnews1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
     schedule: "0 */2 * * *"
+    timeout_minutes: 15   # 30-day p99 26 s, max 37 s
     on_failure: continue
 
   - name: dealnews1-redirects
@@ -70,12 +71,14 @@ sequence:
     batch_env: SELECT_LIMIT
     batch_size: 25
     repeat: 2
+    timeout_minutes: 30   # 30-day p99 3.4 min, max 13.8 min (big batches)
     on_failure: continue
 
   - name: dealmoon1-ingest
     script: dealmoon1/scripts/run_ingest_container.sh
     args: ["--no-deps"]
     schedule: "0 */2 * * *"
+    timeout_minutes: 15   # 30-day p99 2 min, max 3.3 min; the one that hung (KNOWN_ISSUES #5)
     on_failure: continue
 
   - name: dealmoon1-redirects
@@ -85,6 +88,7 @@ sequence:
     batch_env: SELECT_LIMIT
     batch_size: 25
     repeat: 1
+    timeout_minutes: 15   # 30-day p99 2.7 min, max 3 min
     on_failure: continue
 
   # Paused: needs Amazon Creators API credentials, which don't exist yet, so

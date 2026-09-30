@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import hashlib
 import inspect
@@ -16,6 +17,12 @@ from typing import Any, Iterable
 from urllib import request
 
 from .discord_alerts import build_playwright_exception_embed
+
+# Longest each capture of a failed page (title, HTML, screenshot) may take.
+# On a wedged page page.title() and page.content() never return (they take no
+# timeout of their own), which hung dealmoon1's ingest for 90 min right after
+# a failed goto (2026-09-26); the report is best-effort, the job must go on.
+CAPTURE_TIMEOUT_S = 10
 
 try:
     import mysql.connector
@@ -624,7 +631,10 @@ class PlaywrightExceptionPipeline:
             f"{_sanitize_filename_fragment(context.item_value)}.png"
         )
         try:
-            await page.screenshot(path=str(screenshot_path), full_page=True)
+            await asyncio.wait_for(
+                page.screenshot(path=str(screenshot_path), full_page=True, timeout=CAPTURE_TIMEOUT_S * 1000),
+                timeout=CAPTURE_TIMEOUT_S + 5,
+            )
             return str(screenshot_path)
         except Exception:
             return None
@@ -661,7 +671,7 @@ async def _safe_async_page_title(page: Any | None) -> str | None:
     if page is None:
         return None
     try:
-        return await page.title()
+        return await asyncio.wait_for(page.title(), timeout=CAPTURE_TIMEOUT_S)
     except Exception:
         return None
 
@@ -679,6 +689,6 @@ async def _safe_async_page_content(page: Any | None) -> str | None:
     if page is None:
         return None
     try:
-        return await page.content()
+        return await asyncio.wait_for(page.content(), timeout=CAPTURE_TIMEOUT_S)
     except Exception:
         return None
