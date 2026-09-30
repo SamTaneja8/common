@@ -146,7 +146,7 @@ backup_table() {
   gzip -t "${file}" 2>/dev/null || die "Dump failed gzip validation: ${file}"
   [[ -n "$(gzip -dc "${file}" 2>/dev/null | head -n 1 || true)" ]] || die "Dump has no header line: ${file}"
 
-  rclone copy "${file}" "${REMOTE_ROOT}/${table}/${RUN_DATE}"
+  rclone copy -q "${file}" "${REMOTE_ROOT}/${table}/${RUN_DATE}"
   # Only after the upload: a failed run is simply repeated next time.
   printf '%s\n' "${next}" > "${state_file}"
 
@@ -164,7 +164,7 @@ first_database="$(trim "${specs[0]%%.*}")"
   || die "Can't query ${first_database} in ${CONTAINER} as its POSTGRES_USER."
 
 if [[ "${1:-}" == --check ]]; then
-  rclone lsf "${REMOTE_PREFIX}/" >/dev/null || die "Can't list ${REMOTE_PREFIX}/ (check the B2 settings in .env.host)."
+  rclone lsf -q "${REMOTE_PREFIX}/" >/dev/null || die "Can't list ${REMOTE_PREFIX}/ (check the B2 settings in .env.host)."
   log INFO "Check OK: ${#specs[@]} table spec(s), container ${CONTAINER}, database ${first_database}, B2 ${REMOTE_ROOT}/"
   exit 0
 fi
