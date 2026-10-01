@@ -1,0 +1,31 @@
+# Grafana Private Data Source Connect (PDC) agent on VPS1. It opens an
+# outbound SSH tunnel to Grafana Cloud, so Grafana Cloud's MySQL data source
+# can query unified-mysql without any inbound port. It joins scraper-network
+# to reach unified-mysql:3306.
+#
+# Settings (from Grafana Cloud: Connections -> Private data source connect ->
+# your network -> "Configuration details") go in .env next to this file
+# (git-ignored):
+#   GCLOUD_PDC_SIGNING_TOKEN, GCLOUD_HOSTED_GRAFANA_ID, GCLOUD_PDC_CLUSTER
+#
+# Start: cd ~/common/observability/grafana/pdc && docker compose up -d
+services:
+  pdc-agent:
+    image: ${PDC_AGENT_IMAGE:-grafana/pdc-agent:latest}
+    container_name: grafana-pdc-agent
+    restart: unless-stopped
+    command:
+      - -token
+      - ${GCLOUD_PDC_SIGNING_TOKEN:?set GCLOUD_PDC_SIGNING_TOKEN in .env}
+      - -cluster
+      - ${GCLOUD_PDC_CLUSTER:?set GCLOUD_PDC_CLUSTER in .env}
+      - -gcloud-hosted-grafana-id
+      - ${GCLOUD_HOSTED_GRAFANA_ID:?set GCLOUD_HOSTED_GRAFANA_ID in .env}
+    mem_limit: 128m
+    networks:
+      - scraper-network
+
+networks:
+  scraper-network:
+    name: ${MYSQL_PRIVATE_NETWORK:-scraper-network}
+    external: true

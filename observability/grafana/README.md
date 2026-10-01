@@ -1,4 +1,46 @@
-# Grafana alert provisioning
+# Grafana Cloud: dashboards and alerts
+
+## Dashboards (replacing the dashboard app)
+
+Three dashboards, kept as JSON in `dashboards/` and uploaded by
+`scripts/push_grafana_dashboards.sh`. They query MySQL directly
+(`telemetry_db`, `dealstage_db`) through one Grafana Cloud MySQL data source,
+reached over Private Data Source Connect (PDC), so nothing on VPS1 opens a
+port. Logs are already in Grafana Cloud (Loki, shipped by Alloy): use Explore.
+
+| File | Dashboard | Replaces (dashboard app page) |
+|---|---|---|
+| `operations.json` | Deal pipeline: operations: pipeline and job runs, failures, hung jobs, scraper intake, proxy success, Playwright exceptions | Operations |
+| `deals.json` | Deal pipeline: deals and review: review queue by status, page scans, AI runs, publish log, failed AI tasks | Overview, Pipeline, Review queue |
+| `ai_usage.json` | Deal pipeline: AI usage and cost: cost and tokens by model/stage, budget left, provider balances | Usage |
+
+### Setup (once)
+
+1. **PDC network** (Grafana Cloud): Connections -> Private data source
+   connect -> add a network. Copy its signing token, hosted Grafana ID and
+   cluster into `pdc/.env` on VPS1 (`cp pdc/.env.example pdc/.env`,
+   `chmod 600`), then start the agent:
+   `cd ~/common/observability/grafana/pdc && docker compose up -d`.
+   Grafana's PDC page should show the agent as connected.
+2. **Read-only MySQL login**: run `../sql/grafana_reader.sql` as root in
+   unified-mysql with a real password (SELECT on `telemetry_db` and
+   `dealstage_db` only).
+3. **Data source** (Grafana Cloud): Connections -> Add new connection ->
+   MySQL. Host `unified-mysql:3306`, database `telemetry_db`, user
+   `grafana_reader`, and under "Private data source connect" pick the network
+   from step 1. Save & test. Queries name their database
+   (`dealstage_db.amzn_review_queue`), so one data source serves all three.
+4. **Upload**: put `GRAFANA_URL` and `GRAFANA_SA_TOKEN` (Editor service
+   account) in `common/.env.host`, then
+   `~/common/scripts/push_grafana_dashboards.sh` (dry run) and again with
+   `--apply`. Each dashboard's "MySQL" picker selects the data source.
+
+All times are UTC (the dashboards are set to UTC; telemetry is written in
+UTC). To change a dashboard, edit its JSON (or edit in Grafana and export it
+over the file), commit, and re-run the push; uploads replace by `uid`.
+
+## Alert rules
+
 
 Alert rules for the orchestrator/telemetry work in this repo, written in Grafana's standard file-provisioning YAML format (`apiVersion: 1`). Not deployed or verified against a live Grafana instance from here — this needs real-world validation before you trust it in production.
 
