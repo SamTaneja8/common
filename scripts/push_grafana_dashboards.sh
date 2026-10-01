@@ -53,16 +53,23 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
 
-# Folder: create if it doesn't exist (200 = exists, 404 = create).
-code="$(api GET "/api/folders/${FOLDER_UID}" | tail -n1)"
-if [[ "${code}" == 404 ]]; then
+# Folder: create it unless it's already in the list of folders this token can
+# see. (Asking for a missing folder by uid returns 403, not 404, for
+# non-admin roles in recent Grafana versions, so the list is the reliable check.)
+out="$(api GET "/api/folders?limit=1000")"
+code="$(tail -n1 <<< "${out}")"
+if [[ "${code}" != 200 ]]; then
+  echo "Can't list folders (HTTP ${code}): check GRAFANA_URL and that the token is valid. $(head -c 200 <<< "${out}")" >&2
+  exit 1
+fi
+if ! sed '$d' <<< "${out}" | python3 -c 'import json,sys; sys.exit(0 if any(f.get("uid")==sys.argv[1] for f in json.load(sys.stdin)) else 1)' "${FOLDER_UID}"; then
   printf '{"uid":"%s","title":"%s"}' "${FOLDER_UID}" "${FOLDER_TITLE}" > "${tmp}/folder.json"
   out="$(api POST /api/folders "${tmp}/folder.json")"
-  [[ "$(tail -n1 <<< "${out}")" == 200 ]] || { echo "Creating the folder failed: ${out}" >&2; exit 1; }
-  echo "Created folder ${FOLDER_TITLE}"
-elif [[ "${code}" != 200 ]]; then
-  echo "Can't read folder ${FOLDER_UID} (HTTP ${code}): check GRAFANA_URL and the token's role" >&2
-  exit 1
+  case "$(tail -n1 <<< "${out}")" in
+    200) echo "Created folder ${FOLDER_TITLE}" ;;
+    403) echo "Not allowed to create folders (HTTP 403): give the service account the Editor (or Admin) role." >&2; exit 1 ;;
+    *) echo "Creating the folder failed: $(head -c 300 <<< "${out}")" >&2; exit 1 ;;
+  esac
 fi
 
 failed=0
