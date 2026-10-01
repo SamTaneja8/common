@@ -164,8 +164,8 @@ sequence:
     schedule: "0 5 * * *"
     on_failure: continue
 
-  - name: dashboard-backup
-    script: dashboard/jobs/run_backup.sh
+  - name: telemetry-backup
+    script: common/jobs/run_backup.sh
     schedule: "0 5 * * *"
     on_failure: continue
 
