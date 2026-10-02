@@ -1,8 +1,9 @@
 -- Read-only MySQL login for Grafana Cloud (dashboards and alert rules in
 -- observability/grafana/). Grafana reaches unified-mysql through the PDC
 -- agent (observability/grafana/pdc/), which runs on scraper-network, so the
--- login comes from a Docker address, hence '%'. MySQL itself is only
--- published on 127.0.0.1, so nothing outside VPS1 can use this login.
+-- login comes from a Docker address, hence '%'. MySQL is published on
+-- 127.0.0.1 and, for VPS2's aistage, on the WireGuard address 10.20.0.1, so
+-- only VPS1 and its tunnel peer can reach this login.
 --
 -- Run once as root in unified-mysql, with a real password in place of
 -- <password> (never commit it). Then use grafana_reader / that password in

@@ -475,6 +475,42 @@
         "w": 12,
         "h": 7
       }
+    },
+    {
+      "type": "table",
+      "title": "By client",
+      "description": "Who made the calls. aistage:<client> rows are recorded by aistage per caller token (AISTAGE_API_TOKENS); plain 'aistage' rows were recorded by amazonnew itself before that; reviewgate_roundup is reviewgate's direct roundup calls.",
+      "datasource": {
+        "type": "mysql",
+        "uid": "${ds}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mysql",
+            "uid": "${ds}"
+          },
+          "rawSql": "SELECT CASE source_system WHEN 'aistage' THEN 'amazonnew (self-recorded)' WHEN 'reviewgate_roundup' THEN 'reviewgate (roundups, direct)' ELSE REPLACE(source_system, 'aistage:', '') END AS client, COUNT(*) AS calls, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(total_tokens) AS tokens, ROUND(SUM(response_cost_usd),4) AS cost_usd, SUM(call_status NOT IN ('SUCCEEDED','SUCCESS')) AS failed FROM dealstage_db.llm_usage_events WHERE $__timeFilter(request_started_at) GROUP BY 1 ORDER BY cost_usd DESC",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "id": 12,
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      }
     }
   ]
 }
