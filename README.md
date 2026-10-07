@@ -19,6 +19,24 @@ For now, this repo provides:
 - a small Python loader that turns those env vars into structured proxy configs
 - provider builders for Evomi, Bright Data, Decodo, FloppyData, and direct/no-proxy
 
+## Dealvant publishing
+
+The one write path into Dealvant's Postgres, used by amazonnew, reviewgate
+and autopub:
+
+- `common_utils/dealvant/store.py`: upserts for products, offers, articles
+  and roundups; `require_schema()` checks `schema_meta.schema_version`.
+- `common_utils/dealvant/products.py`: Amazon page scan to product record, US
+  price parsing, the shared foreign-price rule.
+- `common_utils/dealvant/roundups.py`: roundup prompt, safe link assembly,
+  pick labels and JSON-LD.
+- `common_utils/dealvant/checks.py`: SEO/grammar/spelling checks (needs
+  `pyspellchecker` in the consumer).
+
+Tests: `DEALVANT_TEST_PG_URI=postgresql://... pytest tests` (database tests
+are skipped without it; they need a throwaway database with
+`dealvant/db/schema.sql` applied).
+
 ## Shared Scraper Base Image
 
 `common` owns the shared scraper base image. The image includes Python 3.11,

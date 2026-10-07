@@ -138,6 +138,18 @@ sequence:
     repeat: 1
     on_failure: continue
 
+  # autopub's blogger: one roundup article per run from live Dealvant
+  # offers. --auto-publish publishes only when the quality gate passes;
+  # anything else is a DRAFT on reviewgate's /roundups page. Paused (never
+  # matches) until autopub is deployed on VPS1 (deal-pipeline KNOWN_ISSUES
+  # #24); then set the schedule, e.g. "0 7 * * *", after the 06:00 publish.
+  - name: autopub-blogger
+    script: autopub/jobs/run_blogger.sh
+    args: ["--auto-publish"]
+    schedule: "0 0 31 2 *"
+    timeout_minutes: 30
+    on_failure: continue
+
   # Backups. Each repo declares WHAT it backs up in its own .env
   # (BACKUP_* / REPO_MYSQL_BACKUP_TABLE_SPECS); setup_mysql's engine does the
   # dump and Backblaze upload; the schedule for each repo is set here, per
