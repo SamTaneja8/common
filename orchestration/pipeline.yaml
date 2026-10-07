@@ -138,11 +138,14 @@ sequence:
     repeat: 1
     on_failure: continue
 
-  # autopub's blogger: one roundup article per run from live Dealvant
-  # offers. --auto-publish publishes only when the quality gate passes;
-  # anything else is a DRAFT on reviewgate's /roundups page. Paused (never
-  # matches) until autopub is deployed on VPS1 (deal-pipeline KNOWN_ISSUES
-  # #24); then set the schedule, e.g. "0 7 * * *", after the 06:00 publish.
+  # autopub's blogger: upkeep (retire roundups with <2 live offers, backfill
+  # embeddings), then one roundup article from live Dealvant offers.
+  # --auto-publish publishes only when the quality gate passes; anything else
+  # is a DRAFT on reviewgate's /roundups page. Reviewer-requested roundups
+  # don't go through here: autopub's always-on worker container handles
+  # those. Paused (never matches) until autopub is deployed on VPS1
+  # (deal-pipeline OPERATIONS "Rollout: autopub"); then set the schedule to
+  # "0 7 * * *", after the 06:00 deal publish.
   - name: autopub-blogger
     script: autopub/jobs/run_blogger.sh
     args: ["--auto-publish"]

@@ -32,6 +32,10 @@ and autopub:
   pick labels and JSON-LD.
 - `common_utils/dealvant/checks.py`: SEO/grammar/spelling checks (needs
   `pyspellchecker` in the consumer).
+- `common_utils/dealvant/requests.py`: the roundup request queue
+  (`reviewgate_roundup_requests` in dealstage MySQL) between reviewgate and
+  autopub's worker; `testing.py` has an in-memory stand-in for tests.
+- `common_utils/dealvant/ROUNDUPS.md`: how roundup articles are made.
 
 Tests: `DEALVANT_TEST_PG_URI=postgresql://... pytest tests` (database tests
 are skipped without it; they need a throwaway database with

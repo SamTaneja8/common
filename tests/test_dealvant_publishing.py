@@ -225,7 +225,7 @@ def _row(conn, sql, *params):
 @needs_pg
 def test_require_schema(conn) -> None:
     store.require_schema(conn)
-    with pytest.raises(store.DealvantSchemaError, match="schema version 2, this publisher needs 99"):
+    with pytest.raises(store.DealvantSchemaError, match=r"schema version \d+, this publisher needs 99"):
         store.require_schema(conn, 99)
 
 

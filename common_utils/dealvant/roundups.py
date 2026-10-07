@@ -7,7 +7,7 @@ dealvant_store.upsert_roundup.
 
 Links are never written by the model: each section's last paragraph carries
 a literal {{OFFER_LINK}} token that is replaced here with a link built from
-the offer's own slug (see autoblog/ROUNDUP_ARTICLES.md). All model text is
+the offer's own slug (see ROUNDUPS.md in this package). All model text is
 HTML-escaped before the link is inserted.
 """
 
