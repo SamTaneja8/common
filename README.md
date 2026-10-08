@@ -44,8 +44,16 @@ are skipped without it; they need a throwaway database with
 ## Shared Scraper Base Image
 
 `common` owns the shared scraper base image. The image includes Python 3.11,
-Playwright Chromium, shared scraper libraries, and the installed `common-utils`
-package so child scraper images can inherit one reusable runtime layer.
+Playwright Chromium, shared scraper libraries, and the `run_job_common.sh` /
+`metering_cli.py` helpers. It does **not** contain `common_utils`: each image
+built on it (amazonnew, dealnews1, dealmoon1) copies `common_utils` in as one
+of its own last layers, so a `common_utils` change neither rebuilds the base
+nor invalidates the dependency installs layered on top of it.
+
+Which repos a `common` change actually needs rebuilt is worked out by
+`scripts/common_consumers.py` (used by deal-pipeline's `deploy.sh common`):
+it maps the changed files to `common_utils` modules and finds the repos that
+import them.
 
 ### Local Build
 

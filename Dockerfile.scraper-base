@@ -40,23 +40,16 @@ RUN python -m playwright install --with-deps chromium \
 # the identical real version anyway.
 RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(); open('/etc/chromium_version', 'w').write(b.version); b.close(); p.stop()"
 
-# Narrow copies rather than `COPY . /tmp/common`: only what's actually
-# needed to pip-install common_utils and install the two binaries below.
-# Anything else in this repo (orchestration/pipeline.yaml in particular,
-# expected to change often) now falls outside the build context entirely
-# for this image, instead of just being a cheap cache-bust.
-COPY pyproject.toml /tmp/common/pyproject.toml
-COPY common_utils /tmp/common/common_utils
+# No common_utils here: every image built on this base copies it in as one
+# of its own last layers (amazonnew, dealnews1, dealmoon1), so a
+# common_utils change doesn't rebuild this image or invalidate the
+# dependency installs layered on top of it. The two scripts below call
+# common_utils at run time, from the consumer's copy.
 COPY scripts/run_job_common.sh /tmp/common/scripts/run_job_common.sh
 COPY bin/metering_cli.py /tmp/common/bin/metering_cli.py
-RUN python -m pip install --no-cache-dir /tmp/common \
-    && install -m 0755 /tmp/common/scripts/run_job_common.sh /usr/local/bin/run_job_common.sh \
+RUN install -m 0755 /tmp/common/scripts/run_job_common.sh /usr/local/bin/run_job_common.sh \
     && install -m 0755 /tmp/common/bin/metering_cli.py /usr/local/bin/metering_cli.py \
     && rm -rf /tmp/common
-
-# Also copy the shared source tree directly so scraper repos always get the
-# full module set even if wheel packaging lags behind new subpackages.
-COPY common_utils /usr/local/lib/python3.11/site-packages/common_utils
 
 RUN mkdir -p /var/www/app/logs /var/www/app/artifacts
 

@@ -95,7 +95,7 @@ inputs_fingerprint() {
   sha="$(command -v sha256sum >/dev/null && echo sha256sum || echo 'shasum -a 256')"
   (
     cd "${PROJECT_DIR}"
-    find Dockerfile.scraper-base .dockerignore pyproject.toml common_utils bin/metering_cli.py \
+    find Dockerfile.scraper-base .dockerignore bin/metering_cli.py \
          scripts/run_job_common.sh -type f ! -path '*/__pycache__/*' ! -name '*.pyc' 2>/dev/null \
       | LC_ALL=C sort | xargs ${sha}
   ) | ${sha} | cut -d' ' -f1
