@@ -314,3 +314,29 @@ def test_search_tsv_is_generated(conn) -> None:
     store.upsert_offer(conn, _offer(title="Stainless steel electric kettle"))
     row = _row(conn, "SELECT id FROM offers WHERE search_tsv @@ websearch_to_tsquery('english', 'kettles')")
     assert row == {"id": "o1"}
+
+
+@needs_pg
+def test_reviewed_by_editor_survives_automatic_republish(conn) -> None:
+    def article(**overrides):
+        fields = dict(
+            id="a1", title="t", slug="a1", excerpt="e", body="b", status="PUBLISHED", is_featured=False,
+            featured_rank=100, hero_image="/i.svg", published_at=NOW, category_id="cat-home",
+        )
+        fields.update(overrides)
+        return store.ArticleRecord(**fields)
+
+    store.upsert_article(conn, article())  # automatic publisher: not reviewed
+    assert _row(conn, "SELECT reviewed_by_editor FROM articles")["reviewed_by_editor"] is False
+    store.upsert_article(conn, article(reviewed_by_editor=True))  # an editor publishes it
+    store.upsert_article(conn, article(title="t2"))  # automatic republish keeps the review
+    assert _row(conn, "SELECT reviewed_by_editor, title FROM articles") == {"reviewed_by_editor": True, "title": "t2"}
+
+    for oid in ("o1", "o2"):
+        store.upsert_offer(conn, _offer(id=oid, slug=oid))
+    record = assemble_roundup(category=CATEGORY, offers=OFFERS[:2], result=_result(), base_url="https://x")
+    store.upsert_roundup(conn, record)
+    store.set_roundup_status(conn, record.id, "PUBLISHED")  # autopub's gate
+    assert _row(conn, "SELECT reviewed_by_editor FROM articles WHERE id=%s", record.id)["reviewed_by_editor"] is False
+    store.set_roundup_status(conn, record.id, "PUBLISHED", reviewed_by_editor=True)  # editor on reviewgate
+    assert _row(conn, "SELECT reviewed_by_editor FROM articles WHERE id=%s", record.id)["reviewed_by_editor"] is True

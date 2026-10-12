@@ -32,7 +32,7 @@ from psycopg.types.json import Jsonb
 # Dealvant schema_meta.schema_version this module writes against. Raise it
 # together with dealvant/db/schema.sql whenever a writer here starts using
 # a new column.
-REQUIRED_SCHEMA_VERSION = 2
+REQUIRED_SCHEMA_VERSION = 3
 
 # A price observation is recorded when the price or availability changes, or
 # when the last one is at least this old, so a steady price still leaves one
@@ -113,6 +113,10 @@ class ArticleRecord:
     meta_title: str | None = None
     meta_description: str | None = None
     structured_data: dict[str, Any] | None = None
+    # True when an editor reviewed it before publishing (reviewgate). None
+    # (automatic publishers) leaves the stored value alone, so a republish
+    # never clears an earlier review.
+    reviewed_by_editor: bool | None = None
 
 
 @dataclass
@@ -343,9 +347,9 @@ def upsert_article(conn, article: ArticleRecord) -> None:
             INSERT INTO articles (
                 id, title, slug, excerpt, body, status, is_featured, featured_rank,
                 hero_image, published_at, category_id, merchant_id, meta_title, meta_description,
-                structured_data_json
+                structured_data_json, reviewed_by_editor
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, FALSE))
             ON CONFLICT (id) DO UPDATE
             SET title = EXCLUDED.title,
                 slug = EXCLUDED.slug,
@@ -362,6 +366,7 @@ def upsert_article(conn, article: ArticleRecord) -> None:
                 meta_title = COALESCE(EXCLUDED.meta_title, articles.meta_title),
                 meta_description = COALESCE(EXCLUDED.meta_description, articles.meta_description),
                 structured_data_json = EXCLUDED.structured_data_json,
+                reviewed_by_editor = COALESCE(%s, articles.reviewed_by_editor),
                 updated_at = NOW()
             """,
             (
@@ -380,6 +385,8 @@ def upsert_article(conn, article: ArticleRecord) -> None:
                 article.meta_title,
                 article.meta_description,
                 _jsonb(article.structured_data),
+                article.reviewed_by_editor,
+                article.reviewed_by_editor,
             ),
         )
 
@@ -441,18 +448,21 @@ def upsert_roundup(conn, roundup: RoundupRecord) -> None:
             )
 
 
-def set_roundup_status(conn, article_id: str, status: str) -> int:
+def set_roundup_status(conn, article_id: str, status: str, *, reviewed_by_editor: bool = False) -> int:
     """Publishes (stamping published_at) or unpublishes a roundup; returns
-    rows changed. A roundup removed on Dealvant is never touched."""
+    rows changed. reviewed_by_editor=True marks it as reviewed (an editor
+    published it on reviewgate). A roundup removed on Dealvant is never
+    touched."""
     with conn.cursor() as cursor:
         cursor.execute(
             """
             UPDATE articles
             SET status = %s,
                 published_at = CASE WHEN %s = 'PUBLISHED' THEN NOW() ELSE published_at END,
+                reviewed_by_editor = reviewed_by_editor OR %s,
                 updated_at = NOW()
             WHERE id = %s AND is_roundup AND removed_at IS NULL
             """,
-            (status, status, article_id),
+            (status, status, reviewed_by_editor, article_id),
         )
         return cursor.rowcount
