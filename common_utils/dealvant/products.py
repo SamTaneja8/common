@@ -8,7 +8,8 @@ as strings (MySQL) or already decoded.
 
 Also home of the foreign-price rule shared by amazonnew's scanner and
 publish guard and reviewgate's publish guard (deal-pipeline KNOWN_ISSUES
-#11/#29).
+#11/#29), the coupon-code reader for deal-feed text, and the rule for when
+a scanned availability means the product can't be bought.
 """
 
 from __future__ import annotations
@@ -57,6 +58,35 @@ def parse_usd_cents(price_text: object) -> int | None:
     except InvalidOperation:
         return None
     return cents if cents > 0 else None
+
+
+# "code SAVE20", "promo code: SAVE20", "with coupon code “SAVE20”". Codes
+# are upper-case letters and digits (dashes allowed) with at least one
+# digit or 5+ letters, so "code below" or "code at checkout" never match.
+_COUPON = re.compile(r"(?i:\b(?:promo |coupon |discount |offer )?code)[:\s]+[\"“'‘]?([A-Z0-9][A-Z0-9-]{3,19})\b")
+_UNAVAILABLE = re.compile(
+    r"currently unavailable|out of stock|no longer available",
+    re.IGNORECASE,
+)
+
+
+def coupon_code_from_text(*texts: object) -> str | None:
+    """The first coupon code mentioned in deal-feed text (title, callout,
+    summary), or None."""
+    for text in texts:
+        if not isinstance(text, str):
+            continue
+        for match in _COUPON.finditer(text):
+            code = match.group(1).strip("-")
+            if len(code) >= 4 and (any(ch.isdigit() for ch in code) or len(code) >= 5) and not code.isdigit():
+                return code
+    return None
+
+
+def is_unavailable(availability_text: object) -> bool:
+    """True when a product page's availability says it can't be bought
+    ("Currently unavailable.", "Temporarily out of stock.")."""
+    return isinstance(availability_text, str) and bool(_UNAVAILABLE.search(availability_text))
 
 
 def _decoded(value: Any, default: Any) -> Any:

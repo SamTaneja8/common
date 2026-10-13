@@ -261,6 +261,26 @@ def test_removed_deals_stay_hidden_on_republish(conn) -> None:
 
 
 @needs_pg
+def test_end_offers_ends_live_offers_and_republish_revives(conn) -> None:
+    store.upsert_offer(conn, _offer())
+    store.upsert_offer(conn, _offer(id="o2", slug="o2"))
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE offers SET status='ENDED', removed_at=NOW() WHERE id='o2'")
+    assert store.end_offers(conn, ["o1", "o2", "missing"], "unavailable on Amazon") == ["o1"]
+    row = _row(conn, "SELECT status, ended_reason, ended_at IS NOT NULL AS ended, removed_at FROM offers WHERE id='o1'")
+    assert row == {"status": "ENDED", "ended_reason": "unavailable on Amazon", "ended": True, "removed_at": None}
+    # Already ended: nothing changes.
+    assert store.end_offers(conn, ["o1"], "again") == []
+    # A republish as LIVE brings it back and clears the end.
+    store.upsert_offer(conn, _offer(status="LIVE"))
+    assert _row(conn, "SELECT status, ended_at, ended_reason FROM offers WHERE id='o1'") == {
+        "status": "LIVE", "ended_at": None, "ended_reason": None
+    }
+    # The removed one stays removed.
+    assert _row(conn, "SELECT status FROM offers WHERE id='o2'")["status"] == "ENDED"
+
+
+@needs_pg
 def test_upsert_product_and_price_observations(conn) -> None:
     product = product_from_scan(_scan())
     store.upsert_product(conn, product)
@@ -340,3 +360,42 @@ def test_reviewed_by_editor_survives_automatic_republish(conn) -> None:
     assert _row(conn, "SELECT reviewed_by_editor FROM articles WHERE id=%s", record.id)["reviewed_by_editor"] is False
     store.set_roundup_status(conn, record.id, "PUBLISHED", reviewed_by_editor=True)  # editor on reviewgate
     assert _row(conn, "SELECT reviewed_by_editor FROM articles WHERE id=%s", record.id)["reviewed_by_editor"] is True
+
+
+# ------------------------------------------- coupon codes and availability
+
+
+@pytest.mark.parametrize(
+    ("texts", "code"),
+    [
+        (("$19 w/ code SAVE20",), "SAVE20"),
+        (("Extra 15% off with coupon code “FALL15”",), "FALL15"),
+        (("Promo code: BLACKFRIDAY applies",), "BLACKFRIDAY"),
+        (("Take $10 off via Code: TEN-OFF",), "TEN-OFF"),
+        (("No code needed", "Use code below at checkout"), None),
+        (("Clip the on-page coupon",), None),
+        (("code 1234",), None),
+        (("", None, "Apply code DEAL5 in cart"), "DEAL5"),
+    ],
+)
+def test_coupon_code_from_text(texts, code) -> None:
+    from common_utils.dealvant.products import coupon_code_from_text
+
+    assert coupon_code_from_text(*texts) == code
+
+
+@pytest.mark.parametrize(
+    ("text", "unavailable"),
+    [
+        ("Currently unavailable.", True),
+        ("Temporarily out of stock.", True),
+        ("This item is no longer available", True),
+        ("In Stock", False),
+        ("Only 3 left in stock - order soon.", False),
+        (None, False),
+    ],
+)
+def test_is_unavailable(text, unavailable) -> None:
+    from common_utils.dealvant.products import is_unavailable
+
+    assert is_unavailable(text) is unavailable

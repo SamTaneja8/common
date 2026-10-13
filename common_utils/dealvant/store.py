@@ -11,6 +11,10 @@ Conventions every writer here follows:
   publish is safe.
 - A deal removed on Dealvant (removed_at set by reviewgate's
   scripts/dealvant_deals.py) keeps its hidden status on republish.
+- A deal that ended on its own (end_offers: expired at the source or
+  unavailable on Amazon) is ENDED with ended_at set and removed_at NULL,
+  so Dealvant can keep its page up with an "ended" notice. Republishing it
+  as LIVE clears ended_at.
 - Optional fields passed as None leave the stored value alone; an empty
   list or string clears it. That lets one writer (e.g. reviewgate, which
   has no offer meta_title) update a row another writer created without
@@ -32,7 +36,7 @@ from psycopg.types.json import Jsonb
 # Dealvant schema_meta.schema_version this module writes against. Raise it
 # together with dealvant/db/schema.sql whenever a writer here starts using
 # a new column.
-REQUIRED_SCHEMA_VERSION = 3
+REQUIRED_SCHEMA_VERSION = 4
 
 # A price observation is recorded when the price or availability changes, or
 # when the last one is at least this old, so a steady price still leaves one
@@ -296,6 +300,8 @@ def upsert_offer(conn, offer: OfferRecord) -> None:
                 coupon_code = EXCLUDED.coupon_code,
                 -- A deal removed on Dealvant keeps its hidden status on republish.
                 status = CASE WHEN offers.removed_at IS NULL THEN EXCLUDED.status ELSE offers.status END,
+                ended_at = CASE WHEN offers.removed_at IS NULL AND EXCLUDED.status = 'LIVE' THEN NULL ELSE offers.ended_at END,
+                ended_reason = CASE WHEN offers.removed_at IS NULL AND EXCLUDED.status = 'LIVE' THEN NULL ELSE offers.ended_reason END,
                 is_featured = EXCLUDED.is_featured,
                 merchant_id = EXCLUDED.merchant_id,
                 category_id = EXCLUDED.category_id,
@@ -338,6 +344,26 @@ def upsert_offer(conn, offer: OfferRecord) -> None:
                 offer.best_for,
             ),
         )
+
+
+def end_offers(conn, offer_ids: Sequence[str], reason: str) -> list[str]:
+    """Marks live offers as naturally ended (ENDED, ended_at, ended_reason)
+    and returns the ids that changed. Removed offers (removed_at set) and
+    offers that aren't LIVE are left alone."""
+    if not offer_ids:
+        return []
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE offers
+            SET status = 'ENDED', ended_at = NOW(), ended_reason = %s, updated_at = NOW()
+            WHERE id = ANY(%s) AND status = 'LIVE' AND removed_at IS NULL
+            RETURNING id
+            """,
+            (reason[:200], list(offer_ids)),
+        )
+        rows = cursor.fetchall()
+    return [row[0] if isinstance(row, tuple) else row["id"] for row in rows]
 
 
 def upsert_article(conn, article: ArticleRecord) -> None:

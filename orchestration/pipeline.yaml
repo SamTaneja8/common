@@ -138,6 +138,18 @@ sequence:
     repeat: 1
     on_failure: continue
 
+  # Keeps published Dealvant deals current: ends deals dealnews marks
+  # expired, rescans live deals' Amazon pages (price history, availability)
+  # and ends unavailable ones. After the 06:00 publish; dealvant needs
+  # schema version 4 (offers.ended_at) before this runs.
+  - name: amzn-dealvant-refresh
+    script: amazonnew/jobs/run_dealvant_refresh.sh
+    schedule: "0 8 * * *"
+    batch_env: DEALVANT_REFRESH_BATCH_SIZE
+    batch_size: 20
+    repeat: 1
+    on_failure: continue
+
   # autopub's blogger: upkeep (retire roundups with <2 live offers, backfill
   # embeddings), then one roundup article from live Dealvant offers.
   # --auto-publish publishes only when the quality gate passes; anything else
