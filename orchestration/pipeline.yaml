@@ -196,7 +196,7 @@ sequence:
     schedule: "0 5 * * *"
     on_failure: continue
 
-  # Dealvant's design releases staged in reviewgate (~/dealvant-releases on
+  # Dealvant's design releases staged in reviewgate (~/reviewgate/data/dealvant-releases on
   # VPS1, frozen archives; dealvant DESIGN_SYSTEM.md R8.24) to B2 under
   # vps1/dealvant-releases. Files, not tables: copied with --immutable, never
   # deleted. VPS2 backs up the shipped ones from its own crontab.
