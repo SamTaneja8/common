@@ -201,7 +201,7 @@ sequence:
   # vps1/dealvant-releases. Files, not tables: copied with --immutable, never
   # deleted. VPS2 backs up the shipped ones from its own crontab.
   - name: dealvant-releases-backup
-    script: dealvant/jobs/run_release_backup.sh
+    script: reviewgate/jobs/run_release_backup.sh
     schedule: "0 5 * * *"
     on_failure: continue
 
