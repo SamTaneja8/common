@@ -196,6 +196,15 @@ sequence:
     schedule: "0 5 * * *"
     on_failure: continue
 
+  # Dealvant's design releases staged in reviewgate (~/dealvant-releases on
+  # VPS1, frozen archives; dealvant DESIGN_SYSTEM.md R8.24) to B2 under
+  # vps1/dealvant-releases. Files, not tables: copied with --immutable, never
+  # deleted. VPS2 backs up the shipped ones from its own crontab.
+  - name: dealvant-releases-backup
+    script: dealvant/jobs/run_release_backup.sh
+    schedule: "0 5 * * *"
+    on_failure: continue
+
   # Weekly Docker disk cleanup (deal-pipeline/scripts/docker_cleanup.sh):
   # prunes build cache unused for 7+ days and dangling images; never removes
   # tagged images, volumes or running containers, and never stops hung job
