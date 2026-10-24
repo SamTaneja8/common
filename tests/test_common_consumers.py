@@ -95,8 +95,7 @@ def test_transitive_importers_count(world) -> None:
     _commit(common, "log")
     # stealth.proxy_runner imports log_context -> the scrapers; amazonnew via
     # its shell script reference; aistage directly. Tests don't count.
-    assert _rebuilds(root, common, state) == {"dealnews1", "dealmoon1", "amazonnew"}
-    assert _assess(root, common, state, "aistage")[0]
+    assert _rebuilds(root, common, state) == {"aistage", "dealnews1", "dealmoon1", "amazonnew"}
     assert not _assess(root, common, state, "reviewgate")[0]
 
 

@@ -42,8 +42,10 @@ from pathlib import Path
 
 # Repos that copy common_utils into their image, per host, in rebuild order.
 CONSUMERS = {
-    "vps1": ["dealnews1", "dealmoon1", "amazonnew", "reviewgate", "autopub"],
-    "vps2": ["aistage"],
+    # aistage first: amazonnew and reviewgate call it. It moved from vps2,
+    # which has no consumers left (deal-pipeline AISTAGE_MIGRATION.md).
+    "vps1": ["aistage", "dealnews1", "dealmoon1", "amazonnew", "reviewgate", "autopub"],
+    "vps2": [],
 }
 # Built FROM the local scraper-base image (common/Dockerfile.scraper-base).
 SCRAPER_BASE_CONSUMERS = {"amazonnew"}
