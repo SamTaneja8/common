@@ -56,7 +56,7 @@ class ApiBalanceSettings:
     huggingface_balance_auth_header: str
     huggingface_balance_auth_value: str
     huggingface_balance_alert_usd: float
-    deepseek_token: str
+    deepseek_api_key: str
     deepseek_balance_alert_usd: float
     gemini_api_key: str
     gemini_balance_api_url: str
@@ -78,7 +78,7 @@ def load_settings() -> ApiBalanceSettings:
         huggingface_balance_auth_header=_get_str("HUGGINGFACE_BALANCE_AUTH_HEADER", "Authorization"),
         huggingface_balance_auth_value=_get_str("HUGGINGFACE_BALANCE_AUTH_VALUE"),
         huggingface_balance_alert_usd=_get_float("HUGGINGFACE_BALANCE_ALERT_USD", 5.0),
-        deepseek_token=_get_str("DEEPSEEK_TOKEN"),
+        deepseek_api_key=_get_str("DEEPSEEK_API_KEY"),
         deepseek_balance_alert_usd=_get_float("DEEPSEEK_BALANCE_ALERT_USD", 5.0),
         gemini_api_key=_get_str("GEMINI_API_KEY", _get_str("GOOGLE_API_KEY")),
         gemini_balance_api_url=_get_str("GEMINI_BALANCE_API_URL"),
@@ -204,12 +204,12 @@ def _openai_balance_check(settings: ApiBalanceSettings) -> tuple[float | None, s
 
 
 def _deepseek_balance_check(settings: ApiBalanceSettings) -> tuple[float | None, str]:
-    if not settings.deepseek_token:
-        return None, "balance check skipped: DEEPSEEK_TOKEN is not configured"
+    if not settings.deepseek_api_key:
+        return None, "balance check skipped: DEEPSEEK_API_KEY is not configured"
     try:
         _status_code, payload = _request_json(
             DEEPSEEK_BALANCE_URL,
-            headers={"Authorization": f"Bearer {settings.deepseek_token}"},
+            headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
         )
         balance = _find_balance(payload)
         if balance is None and isinstance(payload, dict):
@@ -280,14 +280,14 @@ def collect_api_health(settings: ApiBalanceSettings) -> list[ApiCheckResult]:
         )
     )
 
-    deepseek_configured = bool(settings.deepseek_token)
+    deepseek_configured = bool(settings.deepseek_api_key)
     if deepseek_configured:
-        deepseek_headers = {"Authorization": f"Bearer {settings.deepseek_token}"}
+        deepseek_headers = {"Authorization": f"Bearer {settings.deepseek_api_key}"}
         auth_ok, auth_status_code, auth_message = _auth_check(DEEPSEEK_BALANCE_URL, deepseek_headers)
         balance_usd, balance_message = _deepseek_balance_check(settings)
     else:
-        auth_ok, auth_status_code, auth_message = None, None, "authorization check skipped: DEEPSEEK_TOKEN is not configured"
-        balance_usd, balance_message = None, "balance check skipped: DEEPSEEK_TOKEN is not configured"
+        auth_ok, auth_status_code, auth_message = None, None, "authorization check skipped: DEEPSEEK_API_KEY is not configured"
+        balance_usd, balance_message = None, "balance check skipped: DEEPSEEK_API_KEY is not configured"
     results.append(
         ApiCheckResult(
             provider="DeepSeek",
