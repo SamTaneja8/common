@@ -84,3 +84,35 @@ def test_load_schema_uses_fallback_when_pyyaml_unavailable(tmp_path: Path, monke
 
     names = {var["name"] for var in variables}
     assert names == {"MYSQL_PASS", "LOG_TO_CONSOLE", "OPTIONAL_VAR"}
+
+
+FROM_COMMON_SCHEMA = [
+    {"name": "DEEPSEEK_API_KEY", "required": True, "from_common": True},
+    {"name": "GROQ_API_KEY", "required": False, "from_common": True},
+    {"name": "AISTAGE_API_PORT", "required": False},
+]
+
+
+def test_from_common_keys_are_checked_in_common_env() -> None:
+    assert env_check.check_required({}, FROM_COMMON_SCHEMA, {"DEEPSEEK_API_KEY": "sk-x"}) == []
+    missing = env_check.check_required({}, FROM_COMMON_SCHEMA, {})
+    assert len(missing) == 1 and missing[0].startswith("MISSING    DEEPSEEK_API_KEY")
+    assert "common/.env" in missing[0]
+
+
+def test_from_common_key_in_repo_env_is_flagged_even_blank() -> None:
+    # The repo's .env loads after common/.env, so even a blank line wins.
+    problems = env_check.check_required({"DEEPSEEK_API_KEY": ""}, FROM_COMMON_SCHEMA, {"DEEPSEEK_API_KEY": "sk-x"})
+    assert [p.split()[0] for p in problems] == ["OVERRIDES"]
+    optional = env_check.check_required({"GROQ_API_KEY": "g"}, FROM_COMMON_SCHEMA, {"DEEPSEEK_API_KEY": "sk-x"})
+    assert [p.split()[0] for p in optional] == ["OVERRIDES"]
+
+
+def test_from_common_keys_belong_outside_the_repo_example(tmp_path: Path) -> None:
+    example = tmp_path / ".env.example"
+    example.write_text("AISTAGE_API_PORT=8080\n", encoding="utf-8")
+    assert env_check.diff_against_example(FROM_COMMON_SCHEMA, example) == []
+    example.write_text("AISTAGE_API_PORT=8080\nDEEPSEEK_API_KEY=\n", encoding="utf-8")
+    assert env_check.diff_against_example(FROM_COMMON_SCHEMA, example) == [
+        "In .env.example but it comes from common/.env: DEEPSEEK_API_KEY"
+    ]

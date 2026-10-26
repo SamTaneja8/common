@@ -75,6 +75,8 @@ can be restored) and fills in missing offer embeddings.
 
 autopub's `ai_client.py` calls the provider directly through litellm:
 
+Keys are in `common/.env`, the one home for AI provider keys.
+
 | `CONTENT_AI_PROVIDER` | Model env var | Key env var |
 |---|---|---|
 | `deepseek` (default) | `DEEPSEEK_MODEL` (default `deepseek/deepseek-chat`) | `DEEPSEEK_API_KEY` |

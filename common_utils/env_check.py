@@ -123,18 +123,39 @@ def _parse_scalar(value: str) -> Any:
     return value
 
 
-def check_required(env_values: dict[str, str], schema: list[dict[str, Any]]) -> list[str]:
+def check_required(
+    env_values: dict[str, str],
+    schema: list[dict[str, Any]],
+    common_values: dict[str, str] | None = None,
+) -> list[str]:
     """Flags a required variable that's missing entirely, present but
     empty, or still set to its documented `placeholder` value (copied from
     the repo's own .env.example and never edited -- a plain "is the key
     present" check would miss that case, since every credential in these
     .env.example files ships with an obvious placeholder rather than being
-    left blank)."""
+    left blank).
+
+    A variable marked `from_common: true` (AI provider keys) lives only in
+    common/.env, which the repo's containers load before their own .env. It
+    is checked in common_values instead, and any line for it in the repo's
+    own .env is flagged even when blank: that .env is loaded second, so its
+    line would override the shared key."""
     problems: list[str] = []
     for var in schema:
+        name = var["name"]
+        if var.get("from_common"):
+            if name in env_values:
+                problems.append(
+                    f"OVERRIDES  {name} -- set in .env, which overrides common/.env's; delete the line"
+                )
+            if not _is_required(var, env_values):
+                continue
+            value = (common_values or {}).get(name, "")
+            if not value:
+                problems.append(f"MISSING    {name} -- not set in common/.env (provider keys live only there)")
+            continue
         if not _is_required(var, env_values):
             continue
-        name = var["name"]
         placeholder = var.get("placeholder")
         if name not in env_values:
             problems.append(f"MISSING    {name} -- not set at all in .env")
@@ -258,11 +279,14 @@ def render_env(example_path: Path, env_path: Path) -> str:
 
 def diff_against_example(schema: list[dict[str, Any]], example_path: Path) -> list[str]:
     example_values = parse_env_file(example_path)
-    schema_names = {var["name"] for var in schema}
+    from_common = {var["name"] for var in schema if var.get("from_common")}
+    schema_names = {var["name"] for var in schema} - from_common
     example_names = set(example_values.keys())
 
     notes: list[str] = []
-    for name in sorted(example_names - schema_names):
+    for name in sorted(example_names & from_common):
+        notes.append(f"In .env.example but it comes from common/.env: {name}")
+    for name in sorted(example_names - schema_names - from_common):
         notes.append(f"In .env.example but not in the schema: {name}")
     for name in sorted(schema_names - example_names):
         notes.append(f"In the schema but not in .env.example: {name}")
@@ -322,7 +346,7 @@ def run_cli(
         return 1
 
     env_values = parse_env_file(env_path)
-    problems = check_required(env_values, schema)
+    problems = check_required(env_values, schema, parse_env_file(Path(args.common_env_file)))
     problems += check_provider_credentials(env_values, Path(args.common_env_file), provider_list_var=provider_list_var)
 
     required_count = sum(1 for var in schema if var.get("required"))
