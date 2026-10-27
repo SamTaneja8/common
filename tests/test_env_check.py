@@ -116,3 +116,27 @@ def test_from_common_keys_belong_outside_the_repo_example(tmp_path: Path) -> Non
     assert env_check.diff_against_example(FROM_COMMON_SCHEMA, example) == [
         "In .env.example but it comes from common/.env: DEEPSEEK_API_KEY"
     ]
+
+
+def test_split_value_reads_end_of_line_comments_like_compose() -> None:
+    split = env_check._split_value
+    assert split("1.00 #App default=5.00 ") == ("1.00", "App default=5.00")
+    assert split("#1D8EF5") == ("#1D8EF5", "")  # no space before #: part of the value
+    assert split('"DeepSeek Remote"  # label') == ("DeepSeek Remote", "label")
+    assert split('"a # not a comment"') == ("a # not a comment", "")
+    assert split("plain") == ("plain", "")
+
+
+def test_render_env_puts_end_of_line_comment_above_the_value(tmp_path: Path) -> None:
+    example = tmp_path / ".env.example"
+    example.write_text("# Budget alert.\nAI_BUDGET_LOW_BALANCE_THRESHOLD_USD=5.00\nCOLOR=#000000\nNEW=1\n", encoding="utf-8")
+    env = tmp_path / ".env"
+    env.write_text("AI_BUDGET_LOW_BALANCE_THRESHOLD_USD=1.00 #App default=5.00 \nCOLOR=#7A4DFF\n", encoding="utf-8")
+    assert env_check.parse_env_file(env)["AI_BUDGET_LOW_BALANCE_THRESHOLD_USD"] == "1.00"
+    assert env_check.render_env(example, env) == (
+        "# Budget alert.\n"
+        "# App default=5.00\n"
+        "AI_BUDGET_LOW_BALANCE_THRESHOLD_USD=1.00\n"
+        'COLOR="#7A4DFF"\n'
+        "NEW=1\n"
+    )

@@ -19,6 +19,7 @@ Docker/MySQL/network access needed.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -42,10 +43,48 @@ def parse_env_file(path: Path) -> dict[str, str]:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
-        value = value.strip().strip('"').strip("'")
         if key:
-            values[key] = value
+            values[key] = _split_value(value)[0]
     return values
+
+
+def _split_value(raw: str) -> tuple[str, str]:
+    """(value, end-of-line comment), read the way Docker Compose and
+    python-dotenv read it: a quoted value ends at its closing quote; in an
+    unquoted one, `#` after whitespace starts a comment, while a `#` with no
+    space before it (KEY=#1D8EF5) is part of the value."""
+    raw = raw.strip()
+    if raw[:1] in {'"', "'"}:
+        end = raw.find(raw[0], 1)
+        if end == -1:  # unclosed quote (a multi-line value's first line)
+            return raw.strip('"').strip("'"), ""
+        rest = raw[end + 1 :].strip()
+        return raw[1:end], rest[1:].strip() if rest.startswith("#") else ""
+    match = re.search(r"\s#", raw)
+    if match:
+        return raw[: match.start()].rstrip(), raw[match.end() :].strip()
+    return raw, ""
+
+
+def _end_of_line_comments(path: Path) -> dict[str, str]:
+    """Each setting's end-of-line comment in a .env (KEY=1.00 # why -> why).
+    Like values, the last occurrence of a setting wins. Comment lines above a
+    setting aren't collected: in a .env copied from an older .env.example,
+    most of them are that example's old comments, not the user's notes."""
+    comments: dict[str, str] = {}
+    if not path.is_file():
+        return comments
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        comment = _split_value(value)[1]
+        if comment:
+            comments[key.strip()] = comment
+        else:
+            comments.pop(key.strip(), None)
+    return comments
 
 
 def load_schema(path: Path) -> list[dict[str, Any]]:
@@ -248,6 +287,10 @@ def render_env(example_path: Path, env_path: Path) -> str:
     configured in env_path, falling back to .env.example's own value when
     the real .env doesn't set that key at all.
 
+    An end-of-line comment on a setting in the real .env (KEY=1.00 # why)
+    becomes a comment line just above its value (# why / KEY=1.00), so the
+    value itself stays clean.
+
     Useful whenever .env.example gains new variables or gets reorganized
     (new sections, updated comments) and you want a fresh, fully-commented
     .env matching that structure without manually re-merging already-
@@ -263,14 +306,18 @@ def render_env(example_path: Path, env_path: Path) -> str:
         raise SystemExit(2)
 
     real_values = parse_env_file(env_path)
+    real_comments = _end_of_line_comments(env_path)
+    example_text = example_path.read_text(encoding="utf-8")
     output_lines: list[str] = []
-    for raw_line in example_path.read_text(encoding="utf-8").splitlines():
+    for raw_line in example_text.splitlines():
         stripped = raw_line.strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             output_lines.append(raw_line)
             continue
         key_name = raw_line.partition("=")[0].strip()
         if key_name in real_values:
+            if key_name in real_comments:
+                output_lines.append(f"# {real_comments[key_name]}")
             output_lines.append(f"{key_name}={_format_env_value(real_values[key_name])}")
         else:
             output_lines.append(raw_line)
