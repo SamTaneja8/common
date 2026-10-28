@@ -44,7 +44,7 @@ from pathlib import Path
 CONSUMERS = {
     # aistage first: amazonnew and reviewgate call it. It moved from vps2,
     # which has no consumers left (deal-pipeline AISTAGE_MIGRATION.md).
-    "vps1": ["aistage", "dealnews1", "dealmoon1", "amazonnew", "reviewgate", "autopub"],
+    "vps1": ["aistage", "dealnews1", "dealmoon1", "amazonnew", "reviewgate", "autopub", "affiliate"],
     "vps2": [],
 }
 # Built FROM the local scraper-base image (common/Dockerfile.scraper-base).

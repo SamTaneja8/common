@@ -55,6 +55,7 @@ def world(tmp_path):
         "amazonnew": {"pipe.py": "from common_utils.dealvant import products\n", "scripts/job.sh": "python -m common_utils.log_context\n"},
         "reviewgate": {"app.py": "from common_utils.dealvant.requests import enqueue\n", "tests/t.py": "from common_utils.stealth import proxy_runner\n"},
         "autopub": {"w.py": "from common_utils.dealvant import store as s\n"},
+        "affiliate": {"run.py": "from common_utils.dealvant import promotion_queue\n"},
         "aistage": {"api.py": "from common_utils.log_context import X\n"},
     }
     for repo, files in repos.items():
@@ -103,7 +104,7 @@ def test_package_init_change_affects_its_users(world) -> None:
     root, common, state = world
     _write(common / "common_utils/dealvant/__init__.py", '"""pkg v2"""\n')
     _commit(common, "init")
-    assert _rebuilds(root, common, state) == {"amazonnew", "reviewgate", "autopub"}
+    assert _rebuilds(root, common, state) == {"amazonnew", "reviewgate", "autopub", "affiliate"}
 
 
 def test_changes_outside_common_utils_rebuild_nothing(world) -> None:

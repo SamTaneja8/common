@@ -150,6 +150,35 @@ sequence:
     repeat: 1
     on_failure: continue
 
+  # The affiliate repo, one step per network: each collects its network's
+  # promotions and coupon codes from joined US advertisers into affiliate_db,
+  # ends the gone ones (on Dealvant too), and gives new ones an image and an
+  # aistage write-up. Editors publish them from reviewgate's /affiliate page.
+  # Independent of the amazonnew steps and of each other. Paused (never
+  # match) until affiliate is deployed on VPS1 with that network's API keys
+  # (affiliate README "Setup"); then set each schedule to the one noted,
+  # staggered so they don't call aistage at the same time.
+  - name: affiliate-awin  # then "20 */4 * * *"
+    script: affiliate/jobs/run_affiliate.sh
+    args: ["awin"]
+    schedule: "0 0 31 2 *"
+    timeout_minutes: 30
+    on_failure: continue
+
+  - name: affiliate-rakuten  # then "30 */4 * * *"
+    script: affiliate/jobs/run_affiliate.sh
+    args: ["rakuten"]
+    schedule: "0 0 31 2 *"
+    timeout_minutes: 30
+    on_failure: continue
+
+  - name: affiliate-cj  # then "40 */4 * * *"
+    script: affiliate/jobs/run_affiliate.sh
+    args: ["cj"]
+    schedule: "0 0 31 2 *"
+    timeout_minutes: 30
+    on_failure: continue
+
   # autopub's blogger: upkeep (retire roundups with <2 live offers, backfill
   # embeddings), then one roundup article from live Dealvant offers.
   # --auto-publish publishes only when the quality gate passes; anything else

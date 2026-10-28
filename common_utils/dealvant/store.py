@@ -1,7 +1,8 @@
 """The one place that writes deals into Dealvant's Postgres.
 
-amazonnew's publish pipeline, reviewgate's publish and roundup pages, and
-autopub's blogger all publish into the same tables (dealvant/db/schema.sql)
+amazonnew's publish pipeline, reviewgate's publish and roundup pages,
+autopub's blogger and the affiliate repo's network promotions
+(promotions.py) all publish into the same tables (dealvant/db/schema.sql)
 over a direct psycopg connection. Before this module each kept its own copy
 of the INSERT/UPDATE statements, so a new column meant editing every copy.
 
@@ -36,7 +37,7 @@ from psycopg.types.json import Jsonb
 # Dealvant schema_meta.schema_version this module writes against. Raise it
 # together with dealvant/db/schema.sql whenever a writer here starts using
 # a new column.
-REQUIRED_SCHEMA_VERSION = 4
+REQUIRED_SCHEMA_VERSION = 5
 
 # A price observation is recorded when the price or availability changes, or
 # when the last one is at least this old, so a steady price still leaves one
@@ -98,6 +99,28 @@ class OfferRecord:
     cons: list[str] | None = None
     verdict: str | None = None
     best_for: str | None = None
+    # Deals from other affiliate networks (the affiliate repo): the
+    # offer's own tracking link, which dealvant's /go uses ahead of the
+    # merchant's, and its picture when there's no scanned product. None
+    # leaves them alone.
+    affiliate_url: str | None = None
+    image_url: str | None = None
+    expires_at: datetime | None = None
+
+
+@dataclass
+class MerchantRecord:
+    id: str
+    name: str
+    slug: str
+    tagline: str
+    description: str
+    website_url: str
+    tracking_url: str
+    hero_image: str
+    brand_color: str
+    category_id: str
+    commission_rate: Any = 0
 
 
 @dataclass
@@ -287,9 +310,11 @@ def upsert_offer(conn, offer: OfferRecord) -> None:
                 id, title, slug, short_description, long_description, terms,
                 cashback_percent, coupon_code, status, is_featured, merchant_id, category_id,
                 amazon_url, structured_data_json, embedding, source_name,
-                meta_title, meta_description, product_id, pros, cons, verdict, best_for
+                meta_title, meta_description, product_id, pros, cons, verdict, best_for,
+                affiliate_url, image_url, expires_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s)
             ON CONFLICT (id) DO UPDATE
             SET title = EXCLUDED.title,
                 slug = EXCLUDED.slug,
@@ -316,6 +341,9 @@ def upsert_offer(conn, offer: OfferRecord) -> None:
                 cons = COALESCE(EXCLUDED.cons, offers.cons),
                 verdict = COALESCE(EXCLUDED.verdict, offers.verdict),
                 best_for = COALESCE(EXCLUDED.best_for, offers.best_for),
+                affiliate_url = COALESCE(EXCLUDED.affiliate_url, offers.affiliate_url),
+                image_url = COALESCE(EXCLUDED.image_url, offers.image_url),
+                expires_at = COALESCE(EXCLUDED.expires_at, offers.expires_at),
                 updated_at = NOW()
             """,
             (
@@ -342,8 +370,46 @@ def upsert_offer(conn, offer: OfferRecord) -> None:
                 _jsonb(offer.cons),
                 offer.verdict,
                 offer.best_for,
+                offer.affiliate_url,
+                offer.image_url,
+                offer.expires_at,
             ),
         )
+
+
+def ensure_merchant(conn, merchant: MerchantRecord) -> str:
+    """The id of the merchant with merchant.slug, creating it from `merchant`
+    when there's none. An existing merchant is left as it is (an editor may
+    have changed it in reviewgate)."""
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT id FROM merchants WHERE slug = %s", (merchant.slug,))
+        row = cursor.fetchone()
+        if row is not None:
+            return row[0] if isinstance(row, tuple) else row["id"]
+        cursor.execute(
+            """
+            INSERT INTO merchants (
+                id, name, slug, tagline, description, website_url, tracking_url,
+                hero_image, brand_color, commission_rate, is_featured, category_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE, %s)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            (
+                merchant.id,
+                merchant.name,
+                merchant.slug,
+                merchant.tagline,
+                merchant.description,
+                merchant.website_url,
+                merchant.tracking_url,
+                merchant.hero_image,
+                merchant.brand_color,
+                merchant.commission_rate,
+                merchant.category_id,
+            ),
+        )
+    return merchant.id
 
 
 def end_offers(conn, offer_ids: Sequence[str], reason: str) -> list[str]:
